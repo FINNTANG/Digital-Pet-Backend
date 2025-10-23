@@ -57,6 +57,11 @@ def send_message(request):
         pet_type = data.get('pet_type')  # 获取宠物类型参数
         image_data = data.get('image_data')  # 获取图片数据（可选）
         
+        print(f"[视图层调试] 收到请求 - message: {user_message[:50]}..., pet_type: {pet_type}")
+        print(f"[视图层调试] image_data存在: {bool(image_data)}, 类型: {type(image_data)}, 长度: {len(image_data) if image_data else 0}")
+        if image_data:
+            print(f"[视图层调试] image_data前50字符: {image_data[:50]}")
+        
         # 验证消息不为空
         if not user_message:
             return JsonResponse({
@@ -68,7 +73,9 @@ def send_message(request):
         llm_service = LangChainLLMService(user=request.user)
         
         # 获取AI回复（传递宠物类型参数和图片数据）
+        print(f"[视图层调试] 准备调用llm_service.chat()...")
         ai_response = llm_service.chat(user_message, session_id, pet_type=pet_type, image_data=image_data)
+        print(f"[视图层调试] llm_service.chat() 返回完成")
         
         # 返回成功响应（ai_response 已经是包含完整信息的字典）
         if isinstance(ai_response, dict):

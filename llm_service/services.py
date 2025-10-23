@@ -6,7 +6,7 @@ LLM服务业务逻辑
 
 功能特性：
 - 多宠物人格系统（狐狸/狗/蛇）
-- 摄像头情绪识别（基于多模态LLM）
+- 摄像头情绪识别（基于DeepFace深度学习模型）
 - 属性驱动的选项推荐系统
 - 历史对话上下文管理
 
@@ -14,12 +14,21 @@ LLM服务业务逻辑
 - 图片数据仅在内存中处理，不写入数据库
 - 不记录图片内容到日志
 - 用户需显式授权摄像头访问
+
+技术栈：
+- DeepFace: 开源面部情绪识别库，支持本地运行
+- LangChain: LLM应用开发框架
+- OpenAI API: 对话生成
 """
 
 from typing import List, Dict
 from .models import ChatMessage, LLMConfig
 import json
 import re
+import base64
+import io
+import numpy as np
+from PIL import Image
 
 
 class SimpleLLMService:
@@ -124,6 +133,8 @@ class SimpleLLMService:
         返回:
             dict: AI的JSON响应
         """
+        print(f"[SimpleLLMService.chat调试] 收到参数 - pet_type: {pet_type}, image_data存在: {bool(image_data)}, 长度: {len(image_data) if image_data else 0}")
+        
         # 1. 保存用户消息
         self.save_message('user', user_message, session_id)
         
@@ -135,7 +146,9 @@ class SimpleLLMService:
             }
         
         # 3. 调用LLM获取回复（传递图片数据）
+        print(f"[SimpleLLMService.chat调试] 准备调用_get_llm_response, image_data: {bool(image_data)}")
         ai_response = self._get_llm_response(user_message, session_id, pet_type=pet_type, image_data=image_data)
+        print(f"[SimpleLLMService.chat调试] _get_llm_response返回完成")
         
         # 4. 保存AI回复（只保存message部分）
         if isinstance(ai_response, dict) and 'message' in ai_response:
@@ -247,9 +260,9 @@ class LangChainLLMService(SimpleLLMService):
     使用前请确保已安装：pip install langchain langchain-openai
     """
     
-    def _analyze_emotion_with_llm(self, image_data: str) -> dict:
+    def _analyze_emotion_with_deepface(self, image_data: str) -> dict:
         """
-        使用多模态LLM分析用户面部情绪
+        使用DeepFace分析用户面部情绪
         
         参数:
             image_data (str): Base64编码的图片数据（data:image/jpeg;base64,...）
@@ -258,82 +271,83 @@ class LangChainLLMService(SimpleLLMService):
             dict: 情绪分析结果 {"detected_emotion": str, "confidence": float}
                   如果分析失败，返回 {"detected_emotion": "unknown", "confidence": 0.0}
         """
-        if not self.config or not self.config.api_key:
-            return {"detected_emotion": "unknown", "confidence": 0.0}
-        
         try:
-            from openai import OpenAI
+            from deepface import DeepFace
             
-            # 创建OpenAI客户端
-            client = OpenAI(
-                api_key=self.config.api_key,
-                base_url=self.config.api_base if self.config.api_base else None
-            )
+            print(f"[DeepFace调试] 开始分析情绪，图片数据长度: {len(image_data) if image_data else 0}")
             
-            # 情绪识别提示词
-            emotion_prompt = """You are a facial emotion recognition expert. Analyze the person's facial expression in the image and identify the dominant emotion.
-
-Choose ONLY ONE from these emotions:
-- neutral (平静/中性)
-- happy (开心/快乐)
-- sad (悲伤/难过)
-- angry (生气/愤怒)
-- surprise (惊讶)
-- fear (恐惧/害怕)
-- disgust (厌恶)
-
-Respond with ONLY a JSON object in this exact format:
-{
-  "detected_emotion": "emotion_name",
-  "confidence": 0.85
-}
-
-The confidence should be between 0.0 and 1.0. If you cannot detect a face or emotion clearly, use "unknown" with low confidence."""
-
-            # 使用gpt-4o-mini进行多模态分析（快速且经济）
-            response = client.chat.completions.create(
-                model="openai/gpt-4o",  # 使用支持视觉的模型
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": emotion_prompt
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": image_data,
-                                    "detail": "low"  # 使用低分辨率以节省成本
-                                }
-                            }
-                        ]
-                    }
-                ],
-                max_tokens=100,
-                temperature=0  # 使用确定性输出
-            )
-            
-            # 解析响应
-            content = response.choices[0].message.content.strip()
-            
-            # 尝试提取JSON
-            import re
-            json_match = re.search(r'\{[^{}]*"detected_emotion"[^{}]*\}', content, re.DOTALL)
-            if json_match:
-                emotion_data = json.loads(json_match.group(0))
-                return {
-                    "detected_emotion": emotion_data.get("detected_emotion", "unknown"),
-                    "confidence": float(emotion_data.get("confidence", 0.0))
-                }
+            # 从data URL中提取base64数据
+            # 格式: data:image/jpeg;base64,<base64_data>
+            if ',' in image_data:
+                base64_data = image_data.split(',', 1)[1]
             else:
-                # 如果无法解析JSON，返回默认值
-                return {"detected_emotion": "unknown", "confidence": 0.0}
-                
+                base64_data = image_data
+            
+            print(f"[DeepFace调试] Base64数据长度: {len(base64_data)}")
+            
+            # 解码base64为字节数据
+            image_bytes = base64.b64decode(base64_data)
+            print(f"[DeepFace调试] 图片字节长度: {len(image_bytes)}")
+            
+            # 将字节数据转换为PIL Image
+            image = Image.open(io.BytesIO(image_bytes))
+            print(f"[DeepFace调试] PIL图片尺寸: {image.size}, 模式: {image.mode}")
+            
+            # 转换为RGB格式（如果需要）
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+                print(f"[DeepFace调试] 已转换为RGB模式")
+            
+            # 转换为NumPy数组
+            img_array = np.array(image)
+            print(f"[DeepFace调试] NumPy数组形状: {img_array.shape}")
+            
+            # 使用DeepFace分析情绪
+            # enforce_detection=False: 即使没有检测到人脸也继续处理
+            # silent=True: 不输出日志信息
+            print(f"[DeepFace调试] 开始调用DeepFace.analyze()...")
+            result = DeepFace.analyze(
+                img_path=img_array,
+                actions=['emotion'],
+                enforce_detection=False,
+                silent=True
+            )
+            
+            print(f"[DeepFace调试] DeepFace返回结果类型: {type(result)}")
+            print(f"[DeepFace调试] DeepFace返回内容: {result}")
+            
+            # DeepFace返回一个列表（可能检测到多个人脸），我们取第一个
+            if isinstance(result, list) and len(result) > 0:
+                result = result[0]
+                print(f"[DeepFace调试] 提取第一个结果: {result}")
+            
+            # 提取主要情绪和置信度
+            dominant_emotion = result.get('dominant_emotion', 'unknown')
+            print(f"[DeepFace调试] 主要情绪: {dominant_emotion}")
+            
+            # 从emotion字典中获取该情绪的置信度分数（0-100）
+            emotion_scores = result.get('emotion', {})
+            print(f"[DeepFace调试] 所有情绪分数: {emotion_scores}")
+            
+            confidence_score = emotion_scores.get(dominant_emotion, 0.0)
+            print(f"[DeepFace调试] 主要情绪置信度分数: {confidence_score}")
+            
+            # 将置信度转换为0-1范围，并转换为Python原生float类型（避免JSON序列化错误）
+            confidence = float(confidence_score / 100.0)
+            
+            final_result = {
+                "detected_emotion": str(dominant_emotion),  # 确保是Python str
+                "confidence": confidence  # 确保是Python float
+            }
+            
+            print(f"[DeepFace调试] 最终返回结果: {final_result}")
+            return final_result
+            
         except Exception as e:
             # 如果情绪识别失败，不影响主流程
-            print(f"情绪识别失败: {str(e)}")
+            import traceback
+            print(f"[DeepFace] 情绪识别失败: {str(e)}")
+            print(f"[DeepFace] 错误堆栈: {traceback.format_exc()}")
             return {"detected_emotion": "unknown", "confidence": 0.0}
     
     def _get_llm_response(self, user_message, session_id='default', pet_type=None, image_data=None):
@@ -357,11 +371,17 @@ The confidence should be between 0.0 and 1.0. If you cannot detect a face or emo
         
         # 如果提供了图片数据，先进行情绪识别
         # 注意：图片数据仅在内存中处理，不会保存到数据库或日志
+        print(f"[调试] image_data是否存在: {bool(image_data)}, 类型: {type(image_data)}, 长度: {len(image_data) if image_data else 0}")
+        
         if image_data:
-            emotion_info = self._analyze_emotion_with_llm(image_data)
+            print(f"[调试] 准备调用DeepFace分析...")
+            emotion_info = self._analyze_emotion_with_deepface(image_data)
+            print(f"[调试] DeepFace分析完成，结果: {emotion_info}")
             # 仅记录情绪结果，不记录图片内容
             if emotion_info['detected_emotion'] != 'unknown':
-                print(f"[情绪识别] 检测到: {emotion_info['detected_emotion']} (置信度: {emotion_info['confidence']:.2f})")
+                print(f"[DeepFace情绪识别] 检测到: {emotion_info['detected_emotion']} (置信度: {emotion_info['confidence']:.2f})")
+        else:
+            print(f"[调试] 没有图片数据，跳过情绪识别")
         
         try:
             # 导入LangChain相关模块

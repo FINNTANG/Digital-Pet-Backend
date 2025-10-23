@@ -27,6 +27,10 @@ drf-yasg==1.21.7
 # 图片处理库（用于头像上传）
 Pillow==10.4.0
 
+# 面部情绪识别库（用于摄像头情绪分析）
+deepface>=0.0.93
+tf-keras>=2.18.0  # DeepFace的TensorFlow 2.x依赖
+
 # ========== LLM服务相关 ==========
 
 # LangChain核心库（LLM应用开发框架）
