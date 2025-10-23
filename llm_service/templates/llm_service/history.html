@@ -1,0 +1,68 @@
+{% extends 'accounts/base.html' %}
+
+{% block title %}聊天历史{% endblock %}
+
+{% block content %}
+<h1>聊天历史</h1>
+
+<div style="margin-top: 1rem;">
+    <a href="{% url 'llm_chat' %}" class="btn btn-primary">返回聊天</a>
+    <a href="{% url 'new_session' %}" class="btn btn-secondary" style="margin-left: 1rem;">新建会话</a>
+</div>
+
+<div style="margin-top: 2rem;">
+    <p style="color: #666; margin-bottom: 2rem;">
+        共有 {{ sessions|length }} 个会话，{{ total_messages }} 条消息
+    </p>
+    
+    {% if sessions %}
+        {% for session_id, messages in sessions.items %}
+        <div style="background-color: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 2rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 2px solid #f0f0f0;">
+                <h3 style="margin: 0;">会话: {{ session_id }}</h3>
+                <div>
+                    <a href="{% url 'llm_chat' %}?session_id={{ session_id }}" class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.875rem;">继续对话</a>
+                </div>
+            </div>
+            
+            <div style="color: #666; margin-bottom: 1rem;">
+                消息数量: {{ messages|length }} 条 | 
+                最后更新: {{ messages.0.created_at|date:"Y-m-d H:i:s" }}
+            </div>
+            
+            <!-- 显示该会话的最近几条消息 -->
+            {% for msg in messages|slice:":5" %}
+            <div style="margin-bottom: 1rem; padding: 1rem; background-color: #f8f9fa; border-radius: 6px;">
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                    <span style="font-weight: bold; {% if msg.role == 'user' %}color: #3498db;{% else %}color: #2ecc71;{% endif %}">
+                        {% if msg.role == 'user' %}👤 您{% else %}🤖 AI{% endif %}
+                    </span>
+                    <span style="font-size: 0.75rem; color: #999;">
+                        {{ msg.created_at|date:"m-d H:i" }}
+                    </span>
+                </div>
+                <div style="white-space: pre-wrap; overflow: hidden; text-overflow: ellipsis; {% if msg.content|length > 200 %}display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;{% endif %}">
+                    {{ msg.content }}
+                </div>
+            </div>
+            {% endfor %}
+            
+            {% if messages|length > 5 %}
+            <div style="text-align: center; color: #999; padding-top: 1rem;">
+                还有 {{ messages|length|add:"-5" }} 条消息，点击"继续对话"查看全部
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    {% else %}
+        <div style="text-align: center; padding: 3rem; background-color: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+            <p style="color: #999; font-size: 1.125rem; margin-bottom: 1.5rem;">
+                📝 还没有任何聊天记录
+            </p>
+            <a href="{% url 'llm_chat' %}" class="btn btn-primary">开始第一次对话</a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+

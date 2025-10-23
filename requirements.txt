@@ -1,0 +1,69 @@
+# Django项目依赖文件
+# 
+# 这个文件列出了项目需要的所有Python包及其版本。
+# 安装命令：pip install -r requirements.txt
+
+# ========== 核心框架 ==========
+
+# Django框架（Web开发框架）
+Django==5.2.7
+
+# ========== REST API相关 ==========
+
+# Django REST Framework（REST API开发框架）
+djangorestframework==3.15.2
+
+# JWT认证
+djangorestframework-simplejwt==5.3.1
+
+# 过滤、搜索、排序
+django-filter==24.3
+
+# API文档生成（Swagger）
+drf-yasg==1.21.7
+
+# ========== 图片处理 ==========
+
+# 图片处理库（用于头像上传）
+Pillow==10.4.0
+
+# ========== LLM服务相关 ==========
+
+# LangChain核心库（LLM应用开发框架）
+langchain==1.0.1
+langchain-core==1.0.0
+
+# LangChain OpenAI集成（支持OpenAI和兼容API，如OpenRouter）
+langchain-openai==1.0.0
+
+# OpenAI SDK
+openai==2.6.0
+
+# 其他LLM提供商（可选，根据需要安装）
+# langchain-anthropic  # Anthropic (Claude)
+# langchain-google-genai  # Google Gemini
+
+# ========== HTTP和数据处理 ==========
+
+# HTTP请求库（LangChain的依赖）
+requests>=2.32.0
+httpx>=0.25.2
+
+# 数据处理
+pydantic>=2.7.4
+
+# ========== 工具库 ==========
+
+# 其他依赖
+tenacity>=8.1.0  # 重试机制（LangChain依赖）
+tiktoken>=0.7.0  # OpenAI token计数
+
+# Excel导出（用于Admin数据导出）
+openpyxl==3.1.5
+
+# ========== 开发工具（可选） ==========
+
+# pylint==3.3.3  # 代码检查工具
+# black==24.10.0  # 代码格式化工具
+# pytest-django==4.9.0  # 测试框架
+

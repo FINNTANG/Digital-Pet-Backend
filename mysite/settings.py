@@ -37,6 +37,16 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    
+    # REST API相关
+    'rest_framework',  # Django REST Framework
+    'rest_framework_simplejwt',  # JWT认证
+    'django_filters',  # 过滤功能
+    'drf_yasg',  # API文档生成
+    
+    # 自定义应用
+    'accounts',  # 用户管理应用
+    'llm_service',  # LLM服务应用
 ]
 
 MIDDLEWARE = [
@@ -102,9 +112,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'zh-hans'  # 设置为中文
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Asia/Shanghai'  # 设置为中国时区
 
 USE_I18N = True
 
@@ -120,3 +130,90 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# 登录相关设置
+LOGIN_URL = 'login'  # 未登录用户访问需要登录的页面时，跳转到登录页
+LOGIN_REDIRECT_URL = 'home'  # 登录成功后跳转到首页
+LOGOUT_REDIRECT_URL = 'login'  # 登出后跳转到登录页
+
+# 媒体文件配置（用于存储用户上传的文件，如头像）
+import os
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# REST Framework配置
+REST_FRAMEWORK = {
+    # 认证方式
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',  # JWT Token认证
+        'rest_framework.authentication.SessionAuthentication',  # Session认证（用于浏览器）
+    ],
+    
+    # 默认权限
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticatedOrReadOnly',  # 登录后可写，未登录可读
+    ],
+    
+    # 分页配置
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,  # 每页显示20条数据
+    
+    # 过滤、搜索、排序
+    'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend',  # 过滤
+        'rest_framework.filters.SearchFilter',  # 搜索
+        'rest_framework.filters.OrderingFilter',  # 排序
+    ],
+    
+    # 日期时间格式
+    'DATETIME_FORMAT': '%Y-%m-%d %H:%M:%S',
+    
+    # 异常处理
+    'EXCEPTION_HANDLER': 'rest_framework.views.exception_handler',
+}
+
+# JWT配置
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    # Token有效期
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),  # Access Token有效期1小时
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),  # Refresh Token有效期7天
+    
+    # Token轮换
+    'ROTATE_REFRESH_TOKENS': True,  # 刷新时轮换Refresh Token
+    'BLACKLIST_AFTER_ROTATION': True,  # 轮换后将旧Token加入黑名单
+    
+    # 更新最后登录时间
+    'UPDATE_LAST_LOGIN': True,
+    
+    # 算法和密钥
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    
+    # 请求头配置
+    'AUTH_HEADER_TYPES': ('Bearer',),  # 使用Bearer token
+    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
+    
+    # 用户字段
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    
+    # Token类型
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    'TOKEN_TYPE_CLAIM': 'token_type',
+}
+
+# Swagger文档配置
+SWAGGER_SETTINGS = {
+    'SECURITY_DEFINITIONS': {
+        'Bearer': {
+            'type': 'apiKey',
+            'name': 'Authorization',
+            'in': 'header'
+        }
+    },
+    'USE_SESSION_AUTH': False,
+    'JSON_EDITOR': True,
+    'SUPPORTED_SUBMIT_METHODS': ['get', 'post', 'put', 'delete', 'patch'],
+}

@@ -1,0 +1,39 @@
+{% extends 'accounts/base.html' %}
+
+{% block title %}个人中心{% endblock %}
+
+{% block content %}
+<h1>个人中心</h1>
+
+<div style="margin-top: 2rem;">
+    <h2>基本信息</h2>
+    
+    <div style="margin-top: 1rem; background-color: #f8f9fa; padding: 1.5rem; border-radius: 8px;">
+        <p style="margin-bottom: 1rem;">
+            <strong>用户名：</strong>{{ user.username }}
+        </p>
+        
+        <p style="margin-bottom: 1rem;">
+            <strong>邮箱：</strong>{{ user.email }}
+        </p>
+        
+        <p style="margin-bottom: 1rem;">
+            <strong>注册时间：</strong>{{ user.date_joined|date:"Y年m月d日 H:i" }}
+        </p>
+        
+        <p>
+            <strong>上次登录：</strong>{{ user.last_login|date:"Y年m月d日 H:i" }}
+        </p>
+    </div>
+    
+    <div style="margin-top: 2rem;">
+        <h2>快速操作</h2>
+        <div style="margin-top: 1rem;">
+            <a href="{% url 'llm_chat' %}" class="btn btn-primary">开始AI聊天</a>
+            <a href="{% url 'chat_history' %}" class="btn btn-secondary" style="margin-left: 1rem;">查看聊天历史</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+
