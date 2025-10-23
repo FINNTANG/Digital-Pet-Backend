@@ -81,6 +81,15 @@ class ChatRequestSerializer(serializers.Serializer):
         help_text='会话标识符，用于区分不同对话。不提供则使用default'
     )
     
+    pet_type = serializers.ChoiceField(
+        choices=[('fox', '狐狸'), ('dog', '狗'), ('snake', '蛇')],
+        required=False,
+        default=None,
+        allow_null=True,
+        label='宠物类型',
+        help_text='选择宠物类型（狐狸/狗/蛇），AI将以对应宠物的口吻回答'
+    )
+    
     def validate_message(self, value):
         """验证消息内容"""
         if not value or not value.strip():

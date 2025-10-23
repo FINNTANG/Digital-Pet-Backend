@@ -54,6 +54,7 @@ def send_message(request):
         data = json.loads(request.body)
         user_message = data.get('message', '').strip()
         session_id = data.get('session_id', 'default')
+        pet_type = data.get('pet_type')  # 获取宠物类型参数
         
         # 验证消息不为空
         if not user_message:
@@ -65,15 +66,24 @@ def send_message(request):
         # 创建LLM服务实例
         llm_service = LangChainLLMService(user=request.user)
         
-        # 获取AI回复
-        ai_response = llm_service.chat(user_message, session_id)
+        # 获取AI回复（传递宠物类型参数）
+        ai_response = llm_service.chat(user_message, session_id, pet_type=pet_type)
         
-        # 返回成功响应
-        return JsonResponse({
-            'success': True,
-            'message': user_message,
-            'response': ai_response
-        })
+        # 返回成功响应（ai_response 已经是包含完整信息的字典）
+        if isinstance(ai_response, dict):
+            return JsonResponse({
+                'success': True,
+                'data': ai_response,
+                # 为了向后兼容，保留response字段
+                'response': ai_response.get('message', str(ai_response))
+            })
+        else:
+            # 兼容旧格式
+            return JsonResponse({
+                'success': True,
+                'message': user_message,
+                'response': ai_response
+            })
         
     except json.JSONDecodeError:
         return JsonResponse({

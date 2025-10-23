@@ -3,6 +3,21 @@
 {% block title %}AI聊天{% endblock %}
 
 {% block content %}
+<style>
+    .pet-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+    
+    .pet-btn:active {
+        transform: translateY(0);
+    }
+    
+    .pet-btn.active {
+        border: 2px solid #3498db !important;
+        background-color: #e3f2fd !important;
+    }
+</style>
 <h1>AI聊天助手</h1>
 
 <div style="margin-top: 1rem; display: flex; gap: 1rem;">
@@ -42,6 +57,33 @@
     
     <!-- 输入区域 -->
     <div style="padding: 1rem; background-color: white; border-top: 1px solid #ddd;">
+        <!-- 宠物选择器 -->
+        <div style="margin-bottom: 1rem;">
+            <div style="font-weight: bold; margin-bottom: 0.5rem; color: #555;">选择你的AI宠物伙伴：</div>
+            <div id="pet-selector" style="display: flex; gap: 0.5rem;">
+                <button type="button" class="pet-btn" data-pet="fox" style="flex: 1; padding: 0.75rem; border: 2px solid #ddd; border-radius: 8px; background-color: white; cursor: pointer; transition: all 0.3s; display: flex; flex-direction: column; align-items: center; gap: 0.25rem;">
+                    <span style="font-size: 2rem;">🦊</span>
+                    <span style="font-size: 0.875rem; font-weight: 500;">灵灵（狐狸）</span>
+                    <span style="font-size: 0.75rem; color: #999;">机敏俏皮</span>
+                </button>
+                <button type="button" class="pet-btn" data-pet="dog" style="flex: 1; padding: 0.75rem; border: 2px solid #ddd; border-radius: 8px; background-color: white; cursor: pointer; transition: all 0.3s; display: flex; flex-direction: column; align-items: center; gap: 0.25rem;">
+                    <span style="font-size: 2rem;">🐕</span>
+                    <span style="font-size: 0.875rem; font-weight: 500;">小默（狗狗）</span>
+                    <span style="font-size: 0.75rem; color: #999;">温暖陪伴</span>
+                </button>
+                <button type="button" class="pet-btn" data-pet="snake" style="flex: 1; padding: 0.75rem; border: 2px solid #ddd; border-radius: 8px; background-color: white; cursor: pointer; transition: all 0.3s; display: flex; flex-direction: column; align-items: center; gap: 0.25rem;">
+                    <span style="font-size: 2rem;">🐍</span>
+                    <span style="font-size: 0.875rem; font-weight: 500;">静（蛇蛇）</span>
+                    <span style="font-size: 0.75rem; color: #999;">冷静哲思</span>
+                </button>
+                <button type="button" class="pet-btn active" data-pet="none" style="flex: 1; padding: 0.75rem; border: 2px solid #3498db; border-radius: 8px; background-color: #e3f2fd; cursor: pointer; transition: all 0.3s; display: flex; flex-direction: column; align-items: center; gap: 0.25rem;">
+                    <span style="font-size: 2rem;">🤖</span>
+                    <span style="font-size: 0.875rem; font-weight: 500;">默认助手</span>
+                    <span style="font-size: 0.75rem; color: #999;">标准模式</span>
+                </button>
+            </div>
+        </div>
+        
         <form id="chat-form" style="display: flex; gap: 1rem;">
             <input type="text" id="message-input" placeholder="输入您的消息..." style="flex: 1; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px;" autofocus>
             <button type="submit" class="btn btn-primary" id="send-btn">发送</button>
@@ -65,6 +107,44 @@ const sendBtn = document.getElementById('send-btn');
 // 当前会话ID
 const sessionId = '{{ session_id }}';
 
+// 当前选择的宠物类型
+let selectedPetType = 'none';
+
+// 宠物选择器事件监听
+const petButtons = document.querySelectorAll('.pet-btn');
+petButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+        // 移除所有按钮的active类
+        petButtons.forEach(b => {
+            b.classList.remove('active');
+            b.style.border = '2px solid #ddd';
+            b.style.backgroundColor = 'white';
+        });
+        
+        // 为当前按钮添加active类
+        btn.classList.add('active');
+        btn.style.border = '2px solid #3498db';
+        btn.style.backgroundColor = '#e3f2fd';
+        
+        // 更新选择的宠物类型
+        selectedPetType = btn.dataset.pet;
+        
+        // 更新输入框提示文本
+        updatePlaceholder();
+    });
+});
+
+// 更新输入框提示文本
+function updatePlaceholder() {
+    const placeholders = {
+        'fox': '和聪明的小狐狸灵灵聊聊...',
+        'dog': '和温暖的小狗小默说说话...',
+        'snake': '和冷静的小蛇静交流...',
+        'none': '输入您的消息...'
+    };
+    messageInput.placeholder = placeholders[selectedPetType] || '输入您的消息...';
+}
+
 // 表单提交事件
 chatForm.addEventListener('submit', async (e) => {
     // 阻止表单默认提交行为
@@ -84,6 +164,17 @@ chatForm.addEventListener('submit', async (e) => {
     messageInput.value = '';
     
     try {
+        // 构建请求体
+        const requestBody = {
+            message: message,
+            session_id: sessionId
+        };
+        
+        // 如果选择了宠物类型（且不是默认），添加到请求中
+        if (selectedPetType !== 'none') {
+            requestBody.pet_type = selectedPetType;
+        }
+        
         // 发送消息到服务器
         const response = await fetch('{% url "send_message" %}', {
             method: 'POST',
@@ -91,10 +182,7 @@ chatForm.addEventListener('submit', async (e) => {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': getCookie('csrftoken')
             },
-            body: JSON.stringify({
-                message: message,
-                session_id: sessionId
-            })
+            body: JSON.stringify(requestBody)
         });
         
         const data = await response.json();
@@ -127,9 +215,27 @@ function addMessage(role, content) {
     messageDiv.style.marginBottom = '1.5rem';
     
     const isUser = role === 'user';
-    const avatar = isUser ? '👤' : '🤖';
-    const name = isUser ? '您' : 'AI助手';
-    const avatarColor = isUser ? '#3498db' : '#2ecc71';
+    
+    // 根据宠物类型获取头像和名称
+    let avatar, name, avatarColor;
+    if (isUser) {
+        avatar = '👤';
+        name = '您';
+        avatarColor = '#3498db';
+    } else {
+        // AI助手根据选择的宠物类型显示不同头像
+        const petAvatars = {
+            'fox': { emoji: '🦊', name: '灵灵（狐狸）', color: '#ff6b35' },
+            'dog': { emoji: '🐕', name: '小默（狗狗）', color: '#f7931e' },
+            'snake': { emoji: '🐍', name: '静（蛇）', color: '#4ecdc4' },
+            'none': { emoji: '🤖', name: 'AI助手', color: '#2ecc71' }
+        };
+        
+        const petInfo = petAvatars[selectedPetType] || petAvatars['none'];
+        avatar = petInfo.emoji;
+        name = petInfo.name;
+        avatarColor = petInfo.color;
+    }
     
     messageDiv.innerHTML = `
         <div style="display: flex; align-items: start; gap: 1rem;">

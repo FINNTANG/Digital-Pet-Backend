@@ -46,7 +46,8 @@ class LLMViewSet(viewsets.GenericViewSet):
         请求格式：
         {
             "message": "你好，请介绍一下Django",
-            "session_id": "default"  // 可选
+            "session_id": "default",  // 可选
+            "pet_type": "fox"  // 可选，支持: fox(狐狸), dog(狗), snake(蛇)
         }
         
         响应格式：
@@ -57,6 +58,7 @@ class LLMViewSet(viewsets.GenericViewSet):
                 "user_message": "你好，请介绍一下Django",
                 "ai_response": "Django是一个...",
                 "session_id": "default",
+                "pet_type": "fox",
                 "created_at": "2025-10-21T10:00:00Z"
             }
         }
@@ -73,13 +75,14 @@ class LLMViewSet(viewsets.GenericViewSet):
         
         user_message = serializer.validated_data['message']
         session_id = serializer.validated_data.get('session_id', 'default')
+        pet_type = serializer.validated_data.get('pet_type')
         
         try:
             # 创建LLM服务实例
             llm_service = LangChainLLMService(user=request.user)
             
-            # 调用LLM获取回复
-            ai_response = llm_service.chat(user_message, session_id)
+            # 调用LLM获取回复，传递宠物类型参数
+            ai_response = llm_service.chat(user_message, session_id, pet_type=pet_type)
             
             # 获取创建时间（最后一条消息的时间）
             last_message = ChatMessage.objects.filter(
@@ -87,16 +90,37 @@ class LLMViewSet(viewsets.GenericViewSet):
                 session_id=session_id
             ).order_by('-created_at').first()
             
-            # 返回成功响应
-            return Response({
-                'status': 'success',
-                'message': '消息发送成功',
-                'data': {
+            # 构建响应数据
+            if isinstance(ai_response, dict):
+                # AI返回的是完整的JSON结构
+                response_data = {
+                    'user_message': user_message,
+                    'ai_response': ai_response.get('message', ''),  # 只返回消息文本
+                    'session_id': session_id,
+                    'created_at': last_message.created_at if last_message else timezone.now(),
+                    # 添加完整的AI响应数据
+                    'result': ai_response.get('result', True),
+                    'options': ai_response.get('options', []),
+                    'health': ai_response.get('health', 80),
+                    'mood': ai_response.get('mood', 80)
+                }
+            else:
+                # 兼容旧格式（纯字符串响应）
+                response_data = {
                     'user_message': user_message,
                     'ai_response': ai_response,
                     'session_id': session_id,
                     'created_at': last_message.created_at if last_message else timezone.now()
                 }
+            
+            # 如果指定了宠物类型，也返回该信息
+            if pet_type:
+                response_data['pet_type'] = pet_type
+            
+            return Response({
+                'status': 'success',
+                'message': '消息发送成功',
+                'data': response_data
             })
         
         except Exception as e:
