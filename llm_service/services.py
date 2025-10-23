@@ -3,6 +3,17 @@ LLM服务业务逻辑
 
 这个文件包含了与LLM交互的核心逻辑。
 将业务逻辑与视图函数分离，使代码更清晰、更易于维护。
+
+功能特性：
+- 多宠物人格系统（狐狸/狗/蛇）
+- 摄像头情绪识别（基于多模态LLM）
+- 属性驱动的选项推荐系统
+- 历史对话上下文管理
+
+隐私保护：
+- 图片数据仅在内存中处理，不写入数据库
+- 不记录图片内容到日志
+- 用户需显式授权摄像头访问
 """
 
 from typing import List, Dict
@@ -100,7 +111,7 @@ class SimpleLLMService:
         )
         return message
     
-    def chat(self, user_message, session_id='default', pet_type=None):
+    def chat(self, user_message, session_id='default', pet_type=None, image_data=None):
         """
         与LLM进行对话
         
@@ -108,6 +119,7 @@ class SimpleLLMService:
             user_message (str): 用户的消息
             session_id (str): 会话ID
             pet_type (str): 宠物类型 (fox/dog/snake)
+            image_data (str): Base64编码的图片数据（可选，用于情绪识别）
             
         返回:
             dict: AI的JSON响应
@@ -122,8 +134,8 @@ class SimpleLLMService:
                 'mood': 80
             }
         
-        # 3. 调用LLM获取回复
-        ai_response = self._get_llm_response(user_message, session_id, pet_type=pet_type)
+        # 3. 调用LLM获取回复（传递图片数据）
+        ai_response = self._get_llm_response(user_message, session_id, pet_type=pet_type, image_data=image_data)
         
         # 4. 保存AI回复（只保存message部分）
         if isinstance(ai_response, dict) and 'message' in ai_response:
@@ -145,7 +157,7 @@ class SimpleLLMService:
         self.pet_attributes[session_id] = attrs
         return attrs
     
-    def _get_llm_response(self, user_message, session_id='default', pet_type=None):
+    def _get_llm_response(self, user_message, session_id='default', pet_type=None, image_data=None):
         """
         调用LLM获取回复（演示版本）
         
@@ -158,6 +170,7 @@ class SimpleLLMService:
             user_message (str): 用户消息
             session_id (str): 会话ID
             pet_type (str): 宠物类型 (fox/dog/snake)
+            image_data (str): Base64编码的图片数据（可选，用于情绪识别）
             
         返回:
             str: AI的回复
@@ -234,7 +247,96 @@ class LangChainLLMService(SimpleLLMService):
     使用前请确保已安装：pip install langchain langchain-openai
     """
     
-    def _get_llm_response(self, user_message, session_id='default', pet_type=None):
+    def _analyze_emotion_with_llm(self, image_data: str) -> dict:
+        """
+        使用多模态LLM分析用户面部情绪
+        
+        参数:
+            image_data (str): Base64编码的图片数据（data:image/jpeg;base64,...）
+            
+        返回:
+            dict: 情绪分析结果 {"detected_emotion": str, "confidence": float}
+                  如果分析失败，返回 {"detected_emotion": "unknown", "confidence": 0.0}
+        """
+        if not self.config or not self.config.api_key:
+            return {"detected_emotion": "unknown", "confidence": 0.0}
+        
+        try:
+            from openai import OpenAI
+            
+            # 创建OpenAI客户端
+            client = OpenAI(
+                api_key=self.config.api_key,
+                base_url=self.config.api_base if self.config.api_base else None
+            )
+            
+            # 情绪识别提示词
+            emotion_prompt = """You are a facial emotion recognition expert. Analyze the person's facial expression in the image and identify the dominant emotion.
+
+Choose ONLY ONE from these emotions:
+- neutral (平静/中性)
+- happy (开心/快乐)
+- sad (悲伤/难过)
+- angry (生气/愤怒)
+- surprise (惊讶)
+- fear (恐惧/害怕)
+- disgust (厌恶)
+
+Respond with ONLY a JSON object in this exact format:
+{
+  "detected_emotion": "emotion_name",
+  "confidence": 0.85
+}
+
+The confidence should be between 0.0 and 1.0. If you cannot detect a face or emotion clearly, use "unknown" with low confidence."""
+
+            # 使用gpt-4o-mini进行多模态分析（快速且经济）
+            response = client.chat.completions.create(
+                model="openai/gpt-4o",  # 使用支持视觉的模型
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": emotion_prompt
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": image_data,
+                                    "detail": "low"  # 使用低分辨率以节省成本
+                                }
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=100,
+                temperature=0  # 使用确定性输出
+            )
+            
+            # 解析响应
+            content = response.choices[0].message.content.strip()
+            
+            # 尝试提取JSON
+            import re
+            json_match = re.search(r'\{[^{}]*"detected_emotion"[^{}]*\}', content, re.DOTALL)
+            if json_match:
+                emotion_data = json.loads(json_match.group(0))
+                return {
+                    "detected_emotion": emotion_data.get("detected_emotion", "unknown"),
+                    "confidence": float(emotion_data.get("confidence", 0.0))
+                }
+            else:
+                # 如果无法解析JSON，返回默认值
+                return {"detected_emotion": "unknown", "confidence": 0.0}
+                
+        except Exception as e:
+            # 如果情绪识别失败，不影响主流程
+            print(f"情绪识别失败: {str(e)}")
+            return {"detected_emotion": "unknown", "confidence": 0.0}
+    
+    def _get_llm_response(self, user_message, session_id='default', pet_type=None, image_data=None):
         """
         使用LangChain调用真实的LLM服务
         
@@ -244,10 +346,22 @@ class LangChainLLMService(SimpleLLMService):
             user_message (str): 用户消息
             session_id (str): 会话ID
             pet_type (str): 宠物类型 (fox/dog/snake)
+            image_data (str): Base64编码的图片数据（可选，用于情绪识别）
         """
         
         if not self.config or not self.config.api_key:
             return "⚠️ 系统提示：请先在管理后台配置LLM服务的API密钥。"
+        
+        # 情绪识别结果（初始化）
+        emotion_info = None
+        
+        # 如果提供了图片数据，先进行情绪识别
+        # 注意：图片数据仅在内存中处理，不会保存到数据库或日志
+        if image_data:
+            emotion_info = self._analyze_emotion_with_llm(image_data)
+            # 仅记录情绪结果，不记录图片内容
+            if emotion_info['detected_emotion'] != 'unknown':
+                print(f"[情绪识别] 检测到: {emotion_info['detected_emotion']} (置信度: {emotion_info['confidence']:.2f})")
         
         try:
             # 导入LangChain相关模块
@@ -275,6 +389,23 @@ class LangChainLLMService(SimpleLLMService):
                 SystemMessage(content=system_prompt)
             ]
             
+            # 如果有情绪识别结果，添加情绪上下文提示
+            if emotion_info and emotion_info['detected_emotion'] != 'unknown':
+                emotion_context = f"""[用户情绪分析] 通过面部表情识别，检测到用户当前情绪为：{emotion_info['detected_emotion']}（置信度：{emotion_info['confidence']:.2f}）。
+
+情绪说明：
+- neutral: 平静/中性
+- happy: 开心/快乐
+- sad: 悲伤/难过
+- angry: 生气/愤怒
+- surprise: 惊讶
+- fear: 恐惧/害怕
+- disgust: 厌恶
+
+请根据用户当前的情绪状态，调整你的回复风格和选项建议，保持既定的JSON输出格式和角色人格。"""
+                
+                messages.append(SystemMessage(content=emotion_context))
+            
             # 添加历史消息
             for msg in history:
                 if msg['role'] == 'user':
@@ -289,7 +420,14 @@ class LangChainLLMService(SimpleLLMService):
             response = llm.invoke(messages)
             
             # 解析JSON响应
-            return self._parse_json_response(response.content, session_id)
+            result = self._parse_json_response(response.content, session_id)
+            
+            # 将情绪识别结果合并到返回数据中
+            if emotion_info:
+                result['detected_emotion'] = emotion_info['detected_emotion']
+                result['emotion_confidence'] = emotion_info['confidence']
+            
+            return result
             
         except ImportError:
             return {

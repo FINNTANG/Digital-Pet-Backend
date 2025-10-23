@@ -76,13 +76,14 @@ class LLMViewSet(viewsets.GenericViewSet):
         user_message = serializer.validated_data['message']
         session_id = serializer.validated_data.get('session_id', 'default')
         pet_type = serializer.validated_data.get('pet_type')
+        image_data = serializer.validated_data.get('image_data')
         
         try:
             # 创建LLM服务实例
             llm_service = LangChainLLMService(user=request.user)
             
-            # 调用LLM获取回复，传递宠物类型参数
-            ai_response = llm_service.chat(user_message, session_id, pet_type=pet_type)
+            # 调用LLM获取回复，传递宠物类型参数和图片数据
+            ai_response = llm_service.chat(user_message, session_id, pet_type=pet_type, image_data=image_data)
             
             # 获取创建时间（最后一条消息的时间）
             last_message = ChatMessage.objects.filter(

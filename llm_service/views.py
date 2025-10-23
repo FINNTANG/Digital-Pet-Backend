@@ -55,6 +55,7 @@ def send_message(request):
         user_message = data.get('message', '').strip()
         session_id = data.get('session_id', 'default')
         pet_type = data.get('pet_type')  # 获取宠物类型参数
+        image_data = data.get('image_data')  # 获取图片数据（可选）
         
         # 验证消息不为空
         if not user_message:
@@ -66,8 +67,8 @@ def send_message(request):
         # 创建LLM服务实例
         llm_service = LangChainLLMService(user=request.user)
         
-        # 获取AI回复（传递宠物类型参数）
-        ai_response = llm_service.chat(user_message, session_id, pet_type=pet_type)
+        # 获取AI回复（传递宠物类型参数和图片数据）
+        ai_response = llm_service.chat(user_message, session_id, pet_type=pet_type, image_data=image_data)
         
         # 返回成功响应（ai_response 已经是包含完整信息的字典）
         if isinstance(ai_response, dict):

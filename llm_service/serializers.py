@@ -90,11 +90,36 @@ class ChatRequestSerializer(serializers.Serializer):
         help_text='选择宠物类型（狐狸/狗/蛇），AI将以对应宠物的口吻回答'
     )
     
+    image_data = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        label='图片数据',
+        help_text='Base64编码的图片数据（data:image/jpeg;base64,...），用于情绪识别'
+    )
+    
     def validate_message(self, value):
         """验证消息内容"""
         if not value or not value.strip():
             raise serializers.ValidationError('消息内容不能为空')
         return value.strip()
+    
+    def validate_image_data(self, value):
+        """验证图片数据"""
+        if not value:
+            return value
+        
+        # 检查是否为有效的data URL格式
+        if not value.startswith('data:image/'):
+            raise serializers.ValidationError('图片数据必须是有效的data URL格式')
+        
+        # 检查数据大小（限制为500KB）
+        # Base64编码后的数据大小约为原始数据的1.37倍
+        max_size = 500 * 1024 * 1.37  # 约685KB的Base64数据
+        if len(value) > max_size:
+            raise serializers.ValidationError(f'图片数据过大，请压缩后再上传（当前: {len(value)/1024:.0f}KB, 最大: {max_size/1024:.0f}KB）')
+        
+        return value
 
 
 class ChatResponseSerializer(serializers.Serializer):
