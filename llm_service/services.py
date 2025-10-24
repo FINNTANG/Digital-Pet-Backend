@@ -121,7 +121,7 @@ class SimpleLLMService:
         )
         return message
     
-    def chat(self, user_message, session_id='default', pet_type=None, image_data=None):
+    def chat(self, user_message, session_id='default', pet_type=None, image_data=None, health=None, happiness=None):
         """
         与LLM进行对话
         
@@ -130,11 +130,13 @@ class SimpleLLMService:
             session_id (str): 会话ID
             pet_type (str): 宠物类型 (fox/dog/snake)
             image_data (str): Base64编码的图片数据（可选，用于情绪识别）
+            health (int): 宠物当前健康值（0-100）
+            happiness (int): 宠物当前快乐值（0-100）
             
         返回:
             dict: AI的JSON响应
         """
-        print(f"[SimpleLLMService.chat调试] 收到参数 - pet_type: {pet_type}, image_data存在: {bool(image_data)}, 长度: {len(image_data) if image_data else 0}")
+        print(f"[SimpleLLMService.chat调试] 收到参数 - pet_type: {pet_type}, image_data存在: {bool(image_data)}, 长度: {len(image_data) if image_data else 0}, health: {health}, happiness: {happiness}")
         
         # 1. 保存用户消息
         self.save_message('user', user_message, session_id)
@@ -142,9 +144,15 @@ class SimpleLLMService:
         # 2. 获取或初始化宠物属性
         if session_id not in self.pet_attributes:
             self.pet_attributes[session_id] = {
-                'health': 80,
-                'mood': 80
+                'health': health if health is not None else 80,
+                'mood': happiness if happiness is not None else 80
             }
+        else:
+            # 如果传入了新的属性值，更新它们
+            if health is not None:
+                self.pet_attributes[session_id]['health'] = health
+            if happiness is not None:
+                self.pet_attributes[session_id]['mood'] = happiness
         
         # 3. 调用LLM获取回复（传递图片数据）
         print(f"[SimpleLLMService.chat调试] 准备调用_get_llm_response, image_data: {bool(image_data)}")

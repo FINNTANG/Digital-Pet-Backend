@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',  # JWT认证
     'django_filters',  # 过滤功能
     'drf_yasg',  # API文档生成
+    'corsheaders',  # CORS跨域支持
     
     # 自定义应用
     'accounts',  # 用户管理应用
@@ -52,6 +53,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',  # CORS中间件，必须放在CommonMiddleware之前
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -217,3 +219,43 @@ SWAGGER_SETTINGS = {
     'JSON_EDITOR': True,
     'SUPPORTED_SUBMIT_METHODS': ['get', 'post', 'put', 'delete', 'patch'],
 }
+
+# ========== CORS跨域配置 ==========
+
+# 开发环境：允许所有来源（生产环境需要限制具体域名）
+CORS_ALLOW_ALL_ORIGINS = True  # 开发环境设置为True，生产环境改为False
+
+# 生产环境：指定允许的域名列表（开发时注释掉）
+# CORS_ALLOWED_ORIGINS = [
+#     'http://localhost:3000',  # React开发服务器
+#     'http://localhost:5173',  # Vite开发服务器
+#     'http://127.0.0.1:3000',
+#     'http://127.0.0.1:5173',
+#     'https://yourdomain.com',  # 生产域名
+# ]
+
+# 允许携带Cookie
+CORS_ALLOW_CREDENTIALS = True
+
+# 允许的HTTP方法
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+
+# 允许的请求头
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]

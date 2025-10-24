@@ -47,7 +47,9 @@ class LLMViewSet(viewsets.GenericViewSet):
         {
             "message": "你好，请介绍一下Django",
             "session_id": "default",  // 可选
-            "pet_type": "fox"  // 可选，支持: fox(狐狸), dog(狗), snake(蛇)
+            "pet_type": "fox",  // 可选，支持: fox(狐狸), dog(狗), snake(蛇)
+            "health": 80,  // 可选，宠物当前健康值（0-100），默认80
+            "happiness": 80  // 可选，宠物当前快乐值（0-100），默认80
         }
         
         响应格式：
@@ -77,13 +79,15 @@ class LLMViewSet(viewsets.GenericViewSet):
         session_id = serializer.validated_data.get('session_id', 'default')
         pet_type = serializer.validated_data.get('pet_type')
         image_data = serializer.validated_data.get('image_data')
+        health = serializer.validated_data.get('health', 80)
+        happiness = serializer.validated_data.get('happiness', 80)
         
         try:
             # 创建LLM服务实例
             llm_service = LangChainLLMService(user=request.user)
             
-            # 调用LLM获取回复，传递宠物类型参数和图片数据
-            ai_response = llm_service.chat(user_message, session_id, pet_type=pet_type, image_data=image_data)
+            # 调用LLM获取回复，传递宠物类型参数、图片数据、健康值和快乐值
+            ai_response = llm_service.chat(user_message, session_id, pet_type=pet_type, image_data=image_data, health=health, happiness=happiness)
             
             # 获取创建时间（最后一条消息的时间）
             last_message = ChatMessage.objects.filter(

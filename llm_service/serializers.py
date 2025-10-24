@@ -98,6 +98,24 @@ class ChatRequestSerializer(serializers.Serializer):
         help_text='Base64编码的图片数据（data:image/jpeg;base64,...），用于情绪识别'
     )
     
+    health = serializers.IntegerField(
+        required=False,
+        default=80,
+        min_value=0,
+        max_value=100,
+        label='健康值',
+        help_text='宠物当前健康值（0-100）'
+    )
+    
+    happiness = serializers.IntegerField(
+        required=False,
+        default=80,
+        min_value=0,
+        max_value=100,
+        label='快乐值',
+        help_text='宠物当前快乐值（0-100）'
+    )
+    
     def validate_message(self, value):
         """验证消息内容"""
         if not value or not value.strip():
