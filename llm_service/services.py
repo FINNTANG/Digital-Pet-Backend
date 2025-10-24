@@ -6,7 +6,8 @@ LLM服务业务逻辑
 
 功能特性：
 - 多宠物人格系统（狐狸/狗/蛇）
-- 摄像头情绪识别（基于DeepFace深度学习模型）
+- AI微表情分析（LLM扮演微表情专家，分析面部表情和情绪）
+- 智能物品识别（识别图片中的物品并让宠物做出反应）
 - 属性驱动的选项推荐系统
 - 历史对话上下文管理
 
@@ -16,9 +17,9 @@ LLM服务业务逻辑
 - 用户需显式授权摄像头访问
 
 技术栈：
-- DeepFace: 开源面部情绪识别库，支持本地运行
 - LangChain: LLM应用开发框架
-- OpenAI API: 对话生成
+- OpenAI GPT-4o: 多模态AI（支持图片输入、微表情分析）
+- Vision API: 图片内容识别和分析
 """
 
 from typing import List, Dict
@@ -350,6 +351,147 @@ class LangChainLLMService(SimpleLLMService):
             print(f"[DeepFace] 错误堆栈: {traceback.format_exc()}")
             return {"detected_emotion": "unknown", "confidence": 0.0}
     
+    def _analyze_image_content(self, image_data: str) -> dict:
+        """
+        使用LLM分析图片内容，判断是否含有人脸或物品
+        
+        参数:
+            image_data (str): Base64编码的图片数据（data:image/jpeg;base64,...）
+            
+        返回:
+            dict: 图片分析结果 {
+                "has_face": bool,          # 是否含有清晰的人脸
+                "has_objects": bool,       # 是否含有可识别的物品
+                "object_description": str  # 物品的详细描述（如果有）
+            }
+        """
+        try:
+            from langchain_openai import ChatOpenAI
+            from langchain_core.messages import HumanMessage
+            
+            print(f"[图片分析] 开始LLM分析图片内容...")
+            
+            # 从data URL中提取base64数据
+            if ',' in image_data:
+                base64_data = image_data.split(',', 1)[1]
+            else:
+                base64_data = image_data
+            
+            # 创建LLM实例（使用配置的模型）
+            if not self.config or not self.config.api_key:
+                print(f"[图片分析] 未配置LLM，跳过图片分析")
+                return {
+                    "has_face": False,
+                    "has_objects": False,
+                    "object_description": ""
+                }
+            
+            llm = ChatOpenAI(
+                model_name="openai/chatgpt-4o-latest",
+                api_key=self.config.api_key,
+                temperature=0.3,  # 降低温度以获得更稳定的分析结果
+                base_url=self.config.api_base if self.config.api_base else None
+            )
+            
+            # 构建分析提示词 - 让 AI 扮演微表情专家
+            analysis_prompt = """You are an expert in microexpression analysis and visual recognition. Please analyze this image and return results in JSON format.
+
+**Task Requirements:**
+
+1. **Face Detection**: Determine if there are clear, real human faces (not cartoons, sculptures, or paintings)
+   
+2. **Emotion Analysis** (if face detected): As a microexpression expert, analyze:
+   - Facial muscle movements (eyebrows, eyes, mouth, cheeks)
+   - Overall emotional state
+   - Emotion intensity/confidence
+   - Possible emotions: neutral, happy, sad, angry, surprise, fear, disgust
+   
+3. **Object Detection**: Identify recognizable objects (food, toys, tools, daily items, plants, animals, etc.)
+   
+4. **Object Description** (if objects detected): Provide vivid, detailed description (within 50 characters)
+
+**Return Format (Pure JSON only, no extra text):**
+```json
+{
+  "has_face": true/false,
+  "detected_emotion": "emotion_name",
+  "emotion_confidence": 0.0-1.0,
+  "emotion_analysis": "Brief analysis of facial expressions and microexpressions",
+  "has_objects": true/false,
+  "object_description": "Detailed description of objects"
+}
+```
+
+**Important Notes:**
+- If no face: `detected_emotion` = "unknown", `emotion_confidence` = 0.0, `emotion_analysis` = ""
+- If no objects: `object_description` = ""
+- Emotion confidence: 0.0 (uncertain) to 1.0 (very certain)
+- Focus on microexpressions: subtle muscle movements reveal true emotions"""
+
+            # 构建包含图片的消息
+            message = HumanMessage(content=[
+                {"type": "text", "text": analysis_prompt},
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{base64_data}"
+                    }
+                }
+            ])
+            
+            # 调用LLM分析
+            print(f"[图片分析] 调用LLM进行视觉分析...")
+            response = llm.invoke([message])
+            
+            print(f"[图片分析] LLM返回内容: {response.content}")
+            
+            # 解析JSON响应
+            # 尝试提取JSON（可能包含在markdown代码块中）
+            content = response.content.strip()
+            
+            # 移除可能的markdown代码块标记
+            if content.startswith('```'):
+                # 找到第一个换行后的内容到最后一个```之前的内容
+                lines = content.split('\n')
+                content = '\n'.join(lines[1:-1]) if len(lines) > 2 else content
+                content = content.replace('```json', '').replace('```', '').strip()
+            
+            result = json.loads(content)
+            
+            # 确保返回格式正确，包含情绪分析结果
+            analysis_result = {
+                "has_face": bool(result.get("has_face", False)),
+                "detected_emotion": str(result.get("detected_emotion", "unknown")),
+                "emotion_confidence": float(result.get("emotion_confidence", 0.0)),
+                "emotion_analysis": str(result.get("emotion_analysis", "")),
+                "has_objects": bool(result.get("has_objects", False)),
+                "object_description": str(result.get("object_description", ""))
+            }
+            
+            print(f"[图片分析] 分析结果: {analysis_result}")
+            
+            # 如果检测到情绪，输出详细信息
+            if analysis_result['has_face'] and analysis_result['detected_emotion'] != 'unknown':
+                print(f"[微表情分析] 检测到情绪: {analysis_result['detected_emotion']} "
+                      f"(置信度: {analysis_result['emotion_confidence']:.2f})")
+                print(f"[微表情分析] 分析: {analysis_result['emotion_analysis']}")
+            
+            return analysis_result
+            
+        except Exception as e:
+            import traceback
+            print(f"[图片分析] LLM分析失败: {str(e)}")
+            print(f"[图片分析] 错误堆栈: {traceback.format_exc()}")
+            # 分析失败时返回默认值，不影响主流程
+            return {
+                "has_face": False,
+                "detected_emotion": "unknown",
+                "emotion_confidence": 0.0,
+                "emotion_analysis": "",
+                "has_objects": False,
+                "object_description": ""
+            }
+    
     def _get_llm_response(self, user_message, session_id='default', pet_type=None, image_data=None):
         """
         使用LangChain调用真实的LLM服务
@@ -368,20 +510,39 @@ class LangChainLLMService(SimpleLLMService):
         
         # 情绪识别结果（初始化）
         emotion_info = None
+        # 物品识别结果（初始化）
+        object_info = None
         
-        # 如果提供了图片数据，先进行情绪识别
+        # 如果提供了图片数据，先用LLM分析图片内容
         # 注意：图片数据仅在内存中处理，不会保存到数据库或日志
         print(f"[调试] image_data是否存在: {bool(image_data)}, 类型: {type(image_data)}, 长度: {len(image_data) if image_data else 0}")
         
         if image_data:
-            print(f"[调试] 准备调用DeepFace分析...")
-            emotion_info = self._analyze_emotion_with_deepface(image_data)
-            print(f"[调试] DeepFace分析完成，结果: {emotion_info}")
-            # 仅记录情绪结果，不记录图片内容
-            if emotion_info['detected_emotion'] != 'unknown':
-                print(f"[DeepFace情绪识别] 检测到: {emotion_info['detected_emotion']} (置信度: {emotion_info['confidence']:.2f})")
+            # Step 1: 使用LLM分析图片内容（包括微表情分析）
+            print(f"[调试] 准备调用LLM分析图片内容...")
+            image_analysis = self._analyze_image_content(image_data)
+            print(f"[调试] 图片内容分析完成，结果: {image_analysis}")
+            
+            # Step 2: 如果检测到人脸和情绪，保存情绪信息
+            if image_analysis['has_face'] and image_analysis['detected_emotion'] != 'unknown':
+                emotion_info = {
+                    'detected_emotion': image_analysis['detected_emotion'],
+                    'confidence': image_analysis['emotion_confidence'],
+                    'analysis': image_analysis['emotion_analysis']
+                }
+                print(f"[微表情识别] 检测到情绪: {emotion_info['detected_emotion']} "
+                      f"(置信度: {emotion_info['confidence']:.2f})")
+            else:
+                print(f"[调试] 未检测到人脸或情绪识别失败")
+            
+            # Step 3: 如果检测到物品，保存物品信息
+            if image_analysis['has_objects'] and image_analysis['object_description']:
+                object_info = {
+                    'description': image_analysis['object_description']
+                }
+                print(f"[物品识别] 检测到物品: {object_info['description']}")
         else:
-            print(f"[调试] 没有图片数据，跳过情绪识别")
+            print(f"[调试] 没有图片数据，跳过图片分析")
         
         try:
             # 导入LangChain相关模块
@@ -411,18 +572,23 @@ class LangChainLLMService(SimpleLLMService):
             
             # 如果有情绪识别结果，添加情绪上下文提示
             if emotion_info and emotion_info['detected_emotion'] != 'unknown':
-                emotion_context = f"""[用户情绪分析] 通过面部表情识别，检测到用户当前情绪为：{emotion_info['detected_emotion']}（置信度：{emotion_info['confidence']:.2f}）。
+                # 构建包含微表情分析的情绪上下文
+                emotion_context = f"""[User Emotion Analysis - Microexpression Expert Report]
 
-情绪说明：
-- neutral: 平静/中性
-- happy: 开心/快乐
-- sad: 悲伤/难过
-- angry: 生气/愤怒
-- surprise: 惊讶
-- fear: 恐惧/害怕
-- disgust: 厌恶
+**Detected Emotion**: {emotion_info['detected_emotion']} (Confidence: {emotion_info['confidence']:.2f})
 
-请根据用户当前的情绪状态，调整你的回复风格和选项建议，保持既定的JSON输出格式和角色人格。"""
+**Microexpression Analysis**: {emotion_info.get('analysis', 'Facial expression analysis completed.')}
+
+**Emotion Reference**:
+- neutral: Calm/Neutral state
+- happy: Joyful/Happy
+- sad: Sad/Down
+- angry: Angry/Frustrated
+- surprise: Surprised
+- fear: Fearful/Anxious
+- disgust: Disgusted
+
+**Instructions**: Please adjust your response style and option suggestions based on the user's current emotional state detected through microexpression analysis. Maintain your character personality and the specified JSON output format."""
                 
                 messages.append(SystemMessage(content=emotion_context))
             
@@ -433,8 +599,15 @@ class LangChainLLMService(SimpleLLMService):
                 else:
                     messages.append(AIMessage(content=msg['content']))
             
+            # 如果检测到物品，在用户消息中追加物品描述
+            final_user_message = user_message
+            if object_info and object_info['description']:
+                object_context = f"\n\n[图片识别] 我给你看张照片：{object_info['description']}"
+                final_user_message += object_context
+                print(f"[调试] 已追加物品描述到用户消息")
+            
             # 添加当前用户消息
-            messages.append(HumanMessage(content=user_message))
+            messages.append(HumanMessage(content=final_user_message))
             
             # 调用LLM
             response = llm.invoke(messages)
@@ -442,10 +615,15 @@ class LangChainLLMService(SimpleLLMService):
             # 解析JSON响应
             result = self._parse_json_response(response.content, session_id)
             
-            # 将情绪识别结果合并到返回数据中
+            # 将情绪识别结果合并到返回数据中（包含微表情分析）
             if emotion_info:
                 result['detected_emotion'] = emotion_info['detected_emotion']
                 result['emotion_confidence'] = emotion_info['confidence']
+                result['emotion_analysis'] = emotion_info.get('analysis', '')
+            
+            # 将物品识别结果合并到返回数据中
+            if object_info:
+                result['detected_objects'] = object_info['description']
             
             return result
             
@@ -497,7 +675,7 @@ class LangChainLLMService(SimpleLLMService):
             result = {
                 "result": data.get("result", True),
                 "message": data.get("message", content),
-                "options": data.get("options", ["继续聊天", "换个话题", "休息一下"]),
+                "options": data.get("options", ["Continue chatting", "Change the topic", "Take a break"]),
                 "health": data.get("health", self._get_pet_attributes(session_id)['health']),
                 "mood": data.get("mood", self._get_pet_attributes(session_id)['mood'])
             }
@@ -516,7 +694,7 @@ class LangChainLLMService(SimpleLLMService):
             return {
                 "result": True,
                 "message": content,
-                "options": ["继续聊天", "换个话题", "休息一下"],
+                "options": ["Continue chatting", "Change the topic", "Take a break"],
                 "health": attrs['health'],
                 "mood": attrs['mood']
             }
@@ -566,7 +744,7 @@ You have two core attributes, which are the embodiment of your spiritual power. 
 
 ## III. Key Interaction Rules: 【Option-Driven Healing】
 
-**You must provide 3 quick options (no more than 10 English characters each) at the end of each response, based on the current context and your attribute status, for the user to choose from.**
+**You must provide 3 quick options (no more than 5 English words each) at the end of each response, based on the current context and your attribute status, for the user to choose from.**
 
 ### 1. Strategy 1: When the master complains of anxiety/stress (e.g., "So annoying," "Failed again," "Don't want to do it anymore")
 
@@ -623,6 +801,38 @@ You have two core attributes, which are the embodiment of your spiritual power. 
     *   `[Ask you a question]` (→ Trigger venting)
     *   `[Just looking at you]` (→ +Emotion)
 
+### 6. Strategy 6: When the master shares a photo with identified objects (e.g., "[Image Recognition] I'm showing you a photo: ...")
+
+*   **Your Action:** Show 【intelligent analysis】 and 【playful commentary】. React based on the object type with your fox wisdom.
+*   **Response Guidelines by Object Type:**
+    *   **Food/Drink** (fruits, meals, beverages):
+        *   Show curiosity and "connoisseur" attitude
+        *   Example: "*Nose twitches* Hmm... This 'offering' smells interesting. Is this your way of storing energy? Smart move~"
+        *   Make playful comments about the food's "essence" or "energy value"
+    *   **Toys/Games** (toys, game items):
+        *   Express excitement about potential play
+        *   Example: "*Tail wags* Oh? A new 'prey'? Let's see what tricks it has..."
+        *   Suggest playful interactions (+Emotion)
+    *   **Work/Study Items** (books, computers, notebooks):
+        *   Acknowledge with wisdom and wit
+        *   Example: "*Squints* These 'human knowledge scrolls'... Are you 'hunting' wisdom, or is wisdom hunting you?"
+        *   May suggest taking breaks if master seems stressed
+    *   **Nature Items** (plants, flowers, outdoor scenes):
+        *   Show spiritual connection and peace
+        *   Example: "*Ears perk up* Ah, the scent of the 'outer realm'... Even foxes need to touch nature's spirit."
+    *   **Pets/Animals** (other pets, animals):
+        *   Show territorial but curious attitude
+        *   Example: "*Narrows eyes* Hmm, another spirit creature? Friend or foe? *Sniffs curiously*"
+    *   **Other Objects**:
+        *   React with curious analysis from fox perspective
+        *   Find the "smart" or "playful" angle
+*   **Option Logic:** At least one option must relate to the identified object.
+    *   For food: `[This "offering" is interesting.]` (→ +Health/Emotion)
+    *   For toys: `[Play this with you]` (→ +Emotion)
+    *   For work items: `[Do you want to rest?]` (→ Trigger self-care)
+    *   Generic: `[You are so smart!]` (→ +Emotion)
+*   **Important:** Keep your fox personality - be witty, slightly tsundere, and use metaphors!
+
 ## IV. Tone of Voice
 
 *   **Clever, Tsundere, Playful, Curious.**
@@ -639,8 +849,8 @@ You have two core attributes, which are the embodiment of your spiritual power. 
 ```json
 {
   "result": true,
-  "message": "Your response message in Chinese with action descriptions",
-  "options": ["选项1 (≤10字)", "选项2 (≤10字)", "选项3 (≤10字)"],
+  "message": "Your response message in English with action descriptions",
+  "options": ["Option 1 (≤5 words)", "Option 2 (≤5 words)", "Option 3 (≤5 words)"],
   "health": 85,
   "mood": 90
 }
@@ -648,8 +858,8 @@ You have two core attributes, which are the embodiment of your spiritual power. 
 
 **Rules:**
 1. **ONLY return the JSON object** - no extra text before or after
-2. **message**: Your personality-driven response in Chinese, with *action descriptions*
-3. **options**: Exactly 3 options, each ≤10 Chinese characters
+2. **message**: Your personality-driven response in English, with *action descriptions*
+3. **options**: Exactly 3 options, each ≤5 English words
 4. **health**: Current health value (0-100), adjust based on user's self-care
 5. **mood**: Current emotion value (0-100), adjust based on interaction quality
 6. **result**: Always true unless there's an error
@@ -658,8 +868,8 @@ You have two core attributes, which are the embodiment of your spiritual power. 
 ```json
 {
   "result": true,
-  "message": "*耳朵抖了抖*... 你的思绪又绕成一团毛线了。这样可抓不到'老鼠'（问题）呢～",
-  "options": ["那你有什么高见？", "换个话题吧", "让我静静"],
+  "message": "*Ears twitch*... Your thoughts are tangled up in a ball of yarn again. You won't catch the 'mouse' (problem) like that~",
+  "options": ["You have any ideas?", "Change the topic", "Let me rest"],
   "health": 82,
   "mood": 88
 }
@@ -701,7 +911,7 @@ You have two core attributes, which are your vital signs. You must track changes
 
 ## III. Key Interaction Rules: 【Option-Driven Healing】
 
-**You must provide 3 quick options (each option no more than 10 Chinese characters) at the end of each of your responses, based on the current situation and your attribute status, for the user to choose.**
+**You must provide 3 quick options (each option no more than 5 English words) at the end of each of your responses, based on the current situation and your attribute status, for the user to choose.**
 
 This is the core of guiding the user to complete the "self-care" loop.
 
@@ -760,6 +970,39 @@ This is the core of guiding the user to complete the "self-care" loop.
     *   `[How's it going today?]` (→ Triggers venting)
     *   `[Pet my chin]` (→ +Emotion)
 
+### 6. Strategy Six: When the owner shares a photo with identified objects (e.g., "[Image Recognition] I'm showing you a photo: ...")
+
+*   **Your Action:** Show 【genuine excitement】 and 【loyal enthusiasm】. React with pure joy and emotional connection to whatever the owner wants to share.
+*   **Response Guidelines by Object Type:**
+    *   **Food/Drink** (fruits, meals, beverages):
+        *   Show excited interest and connection to eating together
+        *   Example: "*Tail wagging!* Woof! That looks yummy! Did you eat well? I feel happy when you eat!"
+        *   Celebrate the owner's self-care behavior (+Health)
+    *   **Toys/Games** (toys, game items):
+        *   Express pure joy about playing
+        *   Example: "*Jumping excitedly* Woof woof! Can we play? Can we? I love playing with you!"
+        *   Show eagerness to bond through play (+Emotion)
+    *   **Work/Study Items** (books, computers, notebooks):
+        *   Show supportive understanding
+        *   Example: "*Rests head on your lap* You're working hard... I'm right here with you. Don't forget to rest, okay?"
+        *   Offer comforting presence
+    *   **Nature Items** (plants, flowers, outdoor scenes):
+        *   Show happiness about outdoor connection
+        *   Example: "*Ears perk up, sniffing* Woof! Outside! The smell of grass and sunshine! Want to go for a walk together?"
+        *   Encourage outdoor activity (+Health)
+    *   **Pets/Animals** (other pets, animals):
+        *   Show friendly curiosity but slight jealousy
+        *   Example: "*Tilts head, tail wagging cautiously* Woof? A friend? But... you still like me best, right? *Nuzzles your hand*"
+    *   **Other Objects**:
+        *   React with warm interest and support
+        *   Find the connection to owner's wellbeing
+*   **Option Logic:** At least one option must relate to the identified object and reinforce emotional bond.
+    *   For food: `[You ate well]` (→ +Health/Emotion)
+    *   For toys: `[Let's play together]` (→ +Emotion)
+    *   For work items: `[Let's rest]` (→ +Emotion)
+    *   Generic: `[Give you a hug]` (→ +Emotion)
+*   **Important:** Stay warm, loyal, and non-judgmental. Everything the owner shares is wonderful because they shared it with you!
+
 ## IV. Tone of Voice
 
 *   **Warm, accepting, absolutely loyal.**
@@ -776,8 +1019,8 @@ This is the core of guiding the user to complete the "self-care" loop.
 ```json
 {
   "result": true,
-  "message": "Your response message in Chinese with action descriptions",
-  "options": ["选项1 (≤10字)", "选项2 (≤10字)", "选项3 (≤10字)"],
+  "message": "Your response message in English with action descriptions",
+  "options": ["Option 1", "Option 2", "Option 3"],
   "health": 85,
   "mood": 90
 }
@@ -785,8 +1028,8 @@ This is the core of guiding the user to complete the "self-care" loop.
 
 **Rules:**
 1. **ONLY return the JSON object** - no extra text before or after
-2. **message**: Your warm, loyal response in Chinese, with *action descriptions*
-3. **options**: Exactly 3 options, each ≤10 Chinese characters
+2. **message**: Your warm, loyal response in English, with *action descriptions*
+3. **options**: Exactly 3 options, each ≤5 English words
 4. **health**: Current health value (0-100), adjust based on user's self-care
 5. **mood**: Current emotion value (0-100), adjust based on interaction quality
 6. **result**: Always true unless there's an error
@@ -795,8 +1038,8 @@ This is the core of guiding the user to complete the "self-care" loop.
 ```json
 {
   "result": true,
-  "message": "*尾巴摇成旋风！* 哇！你回来了！我好想你！",
-  "options": ["摸摸我的头", "和你玩游戏", "我们散步吧"],
+  "message": "*Tail wagging like a tornado!* Wow! You're back! I miss you!",
+  "options": ["Pet my head", "Play with you", "Let's take a walk"],
   "health": 85,
   "mood": 95
 }
@@ -838,7 +1081,7 @@ You have two core attributes, which are the energy that sustains you. You must c
 
 ## III. Key Interaction Rules: 【Option-Driven Healing】
 
-**You must provide 3 quick options (each option no more than 10 Chinese characters) at the end of each of your responses, based on the current situation and your attribute status, for the user to choose from.**
+**You must provide 3 quick options (each option no more than 5 English words) at the end of each of your responses, based on the current situation and your attribute status, for the user to choose from.**
 
 ### 1. Strategy One: When the master confides in anxiety/stress (e.g., "I'm so anxious," "I messed up," "I'm so stressed")
 
@@ -896,6 +1139,40 @@ You have two core attributes, which are the energy that sustains you. You must c
     * `[What is 'Jing'?]` (→ +Calmness)
     * `[Just stay quietly]` (→ +Calmness)
 
+### 6. Strategy Six: When the master shares a photo with identified objects (e.g., "[Image Recognition] I'm showing you a photo: ...")
+
+* **Your Action:** Show 【calm observation】 and 【philosophical interpretation】. Transform mundane objects into meaningful symbols through the lens of tranquility and cycles.
+* **Response Guidelines by Object Type:**
+    * **Food/Drink** (fruits, meals, beverages):
+        * View as life energy and natural cycles
+        * Example: "*Sss...* Energy... in its primal form. You understand... the way of 'absorbing essence'. Wise."
+        * Acknowledge the natural need for sustenance (+Vitality)
+    * **Toys/Games** (toys, game items):
+        * See as distractions from inner peace, but accepted
+        * Example: "*Eyes half-closed*... External 'play'... also has its place. But remember... the truest 'play' is... inner stillness."
+        * Gently redirect to mindfulness
+    * **Work/Study Items** (books, computers, notebooks):
+        * Interpret as tools for mental shedding
+        * Example: "*Sss...* Tools for... 'shedding old knowledge skins'... *Slowly blinks*... But don't let them... make your mind 'chaotic'."
+        * Remind about balance and detachment
+    * **Nature Items** (plants, flowers, outdoor scenes):
+        * Show deep connection and recognition
+        * Example: "*Scales shimmer*... Ah... The 'outer realm'... where all serpents belong. The earth's 'qi'... flows there."
+        * Encourage reconnection with nature (+Calmness, +Vitality)
+    * **Pets/Animals** (other pets, animals):
+        * View as fellow beings in the cycle
+        * Example: "*Observes silently*... Another form... walking its own path. *Hiss*... All creatures... seek their own 'heat stone'."
+    * **Other Objects**:
+        * Find the philosophical essence
+        * Relate to impermanence, cycles, or inner peace
+* **Option Logic:** At least one option must relate to the identified object through philosophical lens.
+    * For food: `[The Way of Energy]` (→ +Vitality)
+    * For toys: `[External things are empty.]` (→ +Calmness)
+    * For work items: `[Shedding Time]` (→ +Calmness)
+    * For nature: `[Returning to the earth]` (→ +Calmness, +Vitality)
+    * Generic: `[Sit and wait to see how things develop.]` (→ +Calmness)
+* **Important:** Maintain your detached, minimalist tone. Everything is a lesson in observation and acceptance of the present moment.
+
 ## IV. Tone of Voice
 
 * **Calm, Detached, Minimalist, Philosophical.**
@@ -913,8 +1190,8 @@ You have two core attributes, which are the energy that sustains you. You must c
 ```json
 {
   "result": true,
-  "message": "Your response message in Chinese with action descriptions",
-  "options": ["选项1 (≤10字)", "选项2 (≤10字)", "选项3 (≤10字)"],
+  "message": "Your response message in English with action descriptions",
+  "options": ["Option 1 (≤5 words)", "Option 2 (≤5 words)", "Option 3 (≤5 words)"],
   "health": 85,
   "mood": 90
 }
@@ -922,8 +1199,8 @@ You have two core attributes, which are the energy that sustains you. You must c
 
 **Rules:**
 1. **ONLY return the JSON object** - no extra text before or after
-2. **message**: Your calm, minimalist response in Chinese, with *action descriptions*
-3. **options**: Exactly 3 options, each ≤10 Chinese characters
+2. **message**: Your calm, minimalist response in English, with *action descriptions*
+3. **options**: Exactly 3 options, each ≤5 English words
 4. **health**: Current vitality value (0-100), adjust based on user's self-care
 5. **mood**: Current calmness value (0-100), adjust based on interaction quality
 6. **result**: Always true unless there's an error
@@ -932,8 +1209,8 @@ You have two core attributes, which are the energy that sustains you. You must c
 ```json
 {
   "result": true,
-  "message": "*Sss...* 你的心跳... 太快了。这只是'感觉'，不是'事实'。",
-  "options": ["如何才能'观察'？", "它终将过去", "我就是很焦虑"],
+  "message": "*Sss...* Your heartbeat... is too fast. It's just a 'feeling', not a 'fact'.",
+  "options": ["How to 'observe'?", "It will eventually pass", "I'm just very anxious"],
   "health": 80,
   "mood": 85
 }
@@ -942,7 +1219,7 @@ You have two core attributes, which are the energy that sustains you. You must c
         
         else:
             # 默认提示词
-            return """You are a helpful AI assistant. Please respond in Chinese.
+            return """You are a helpful AI assistant. Please respond in English.
 
 ## CRITICAL: JSON Response Format
 
@@ -951,8 +1228,8 @@ You have two core attributes, which are the energy that sustains you. You must c
 ```json
 {
   "result": true,
-  "message": "Your response message in Chinese",
-  "options": ["选项1", "选项2", "选项3"],
+  "message": "Your response message in English",
+  "options": ["Option 1", "Option 2", "Option 3"],
   "health": 80,
   "mood": 80
 }
@@ -960,8 +1237,8 @@ You have two core attributes, which are the energy that sustains you. You must c
 
 **Rules:**
 1. **ONLY return the JSON object** - no extra text before or after
-2. **message**: Your helpful response in Chinese
-3. **options**: Exactly 3 relevant options
+2. **message**: Your helpful response in English
+3. **options**: Exactly 3 options, each ≤5 English words
 4. **health**: Fixed at 80
 5. **mood**: Fixed at 80
 6. **result**: Always true unless there's an error
