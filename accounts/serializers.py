@@ -422,3 +422,4 @@ class EmailVerificationSerializer(serializers.ModelSerializer):
         return not obj.is_valid()
 
 
+
