@@ -13,20 +13,20 @@ from .models import ChatMessage
 import json
 
 
-@login_required
 def chat_view(request):
     """
     聊天界面视图
     
     显示聊天界面，用户可以在这里与AI进行对话。
-    只有登录用户才能访问（通过@login_required装饰器实现）。
+    支持游客访问（未登录用户也可以使用）。
     """
     
     # 获取会话ID（如果没有则使用默认值）
     session_id = request.GET.get('session_id', 'default')
     
-    # 创建LLM服务实例
-    llm_service = LangChainLLMService(user=request.user)
+    # 创建LLM服务实例（支持游客访问）
+    user = request.user if request.user.is_authenticated else None
+    llm_service = LangChainLLMService(user=user)
     
     # 获取聊天历史
     chat_history = llm_service.get_chat_history(session_id, limit=50)
@@ -35,11 +35,11 @@ def chat_view(request):
     context = {
         'session_id': session_id,
         'chat_history': chat_history,
+        'is_authenticated': request.user.is_authenticated,
     }
     return render(request, 'llm_service/chat.html', context)
 
 
-@login_required
 @require_http_methods(["POST"])
 def send_message(request):
     """
@@ -47,6 +47,7 @@ def send_message(request):
     
     处理用户发送的消息，调用LLM服务获取回复。
     这是一个AJAX API，返回JSON格式的响应。
+    支持游客访问（未登录用户也可以使用）。
     """
     
     try:
@@ -69,8 +70,9 @@ def send_message(request):
                 'error': '消息不能为空'
             }, status=400)
         
-        # 创建LLM服务实例
-        llm_service = LangChainLLMService(user=request.user)
+        # 创建LLM服务实例（支持游客访问）
+        user = request.user if request.user.is_authenticated else None
+        llm_service = LangChainLLMService(user=user)
         
         # 获取AI回复（传递宠物类型参数和图片数据）
         print(f"[视图层调试] 准备调用llm_service.chat()...")
@@ -105,13 +107,22 @@ def send_message(request):
         }, status=500)
 
 
-@login_required
 def chat_history_view(request):
     """
     聊天历史视图
     
     显示用户的所有聊天会话和历史记录。
+    只有登录用户才能查看历史记录，游客将看到提示信息。
     """
+    
+    # 检查用户是否登录
+    if not request.user.is_authenticated:
+        context = {
+            'sessions': {},
+            'total_messages': 0,
+            'is_guest': True,
+        }
+        return render(request, 'llm_service/history.html', context)
     
     # 获取用户的所有聊天消息，按会话分组
     messages = ChatMessage.objects.filter(user=request.user).order_by('-created_at')[:100]
@@ -126,16 +137,17 @@ def chat_history_view(request):
     context = {
         'sessions': sessions,
         'total_messages': messages.count(),
+        'is_guest': False,
     }
     return render(request, 'llm_service/history.html', context)
 
 
-@login_required
 def new_session(request):
     """
     创建新会话
     
     生成一个新的会话ID并跳转到聊天界面。
+    支持游客访问。
     """
     import uuid
     
@@ -146,16 +158,23 @@ def new_session(request):
     return redirect(f'/llm/chat/?session_id={new_session_id}')
 
 
-@login_required
 @require_http_methods(["POST"])
 def clear_history(request):
     """
     清空聊天历史
     
     删除指定会话的所有消息。
+    只有登录用户可以清空历史记录。
     """
     
     try:
+        # 检查用户是否登录
+        if not request.user.is_authenticated:
+            return JsonResponse({
+                'success': False,
+                'error': '请先登录'
+            }, status=401)
+        
         data = json.loads(request.body)
         session_id = data.get('session_id', 'default')
         

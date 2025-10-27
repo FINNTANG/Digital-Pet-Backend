@@ -24,16 +24,17 @@ class LLMViewSet(viewsets.GenericViewSet):
     LLM服务API视图集
     
     提供聊天、历史记录、会话管理等功能。
+    支持游客访问（部分功能需要登录）。
     
     端点：
-    - POST   /api/llm/chat/           # 发送消息
-    - GET    /api/llm/messages/       # 获取消息历史
-    - GET    /api/llm/sessions/       # 获取会话列表
-    - DELETE /api/llm/sessions/{id}/  # 删除会话
-    - GET    /api/llm/statistics/     # 聊天统计
+    - POST   /api/llm/chat/           # 发送消息（支持游客）
+    - GET    /api/llm/messages/       # 获取消息历史（需要登录）
+    - GET    /api/llm/sessions/       # 获取会话列表（需要登录）
+    - DELETE /api/llm/sessions/{id}/  # 删除会话（需要登录）
+    - GET    /api/llm/statistics/     # 聊天统计（需要登录）
     """
     
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]  # 允许游客访问，在各方法中单独检查权限
     
     @action(detail=False, methods=['post'])
     def chat(self, request):
@@ -41,7 +42,7 @@ class LLMViewSet(viewsets.GenericViewSet):
         发送消息并获取AI回复
         
         POST /api/llm/chat/
-        Authorization: Bearer <access_token>
+        Authorization: Bearer <access_token> (可选，支持游客访问)
         
         请求格式：
         {
@@ -64,6 +65,8 @@ class LLMViewSet(viewsets.GenericViewSet):
                 "created_at": "2025-10-21T10:00:00Z"
             }
         }
+        
+        注意：游客的聊天记录不会被保存到数据库。
         """
         # 验证请求数据
         serializer = ChatRequestSerializer(data=request.data)
@@ -83,17 +86,21 @@ class LLMViewSet(viewsets.GenericViewSet):
         happiness = serializer.validated_data.get('happiness', 80)
         
         try:
-            # 创建LLM服务实例
-            llm_service = LangChainLLMService(user=request.user)
+            # 创建LLM服务实例（支持游客访问）
+            user = request.user if request.user.is_authenticated else None
+            llm_service = LangChainLLMService(user=user)
             
             # 调用LLM获取回复，传递宠物类型参数、图片数据、健康值和快乐值
             ai_response = llm_service.chat(user_message, session_id, pet_type=pet_type, image_data=image_data, health=health, happiness=happiness)
             
             # 获取创建时间（最后一条消息的时间）
-            last_message = ChatMessage.objects.filter(
-                user=request.user,
-                session_id=session_id
-            ).order_by('-created_at').first()
+            # 只有登录用户才能获取历史消息
+            last_message = None
+            if request.user.is_authenticated:
+                last_message = ChatMessage.objects.filter(
+                    user=request.user,
+                    session_id=session_id
+                ).order_by('-created_at').first()
             
             # 构建响应数据
             if isinstance(ai_response, dict):
@@ -122,6 +129,10 @@ class LLMViewSet(viewsets.GenericViewSet):
             if pet_type:
                 response_data['pet_type'] = pet_type
             
+            # 标记是否为游客
+            if not request.user.is_authenticated:
+                response_data['is_guest'] = True
+            
             return Response({
                 'status': 'success',
                 'message': '消息发送成功',
@@ -144,7 +155,16 @@ class LLMViewSet(viewsets.GenericViewSet):
         查询参数：
         - session_id: 会话ID（可选，默认返回所有）
         - limit: 返回数量限制（可选，默认50）
+        
+        注意：需要登录才能访问历史记录。
         """
+        # 检查用户是否登录
+        if not request.user.is_authenticated:
+            return Response({
+                'status': 'error',
+                'message': '请先登录才能查看历史记录'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
         session_id = request.query_params.get('session_id')
         limit = int(request.query_params.get('limit', 50))
         
@@ -177,7 +197,16 @@ class LLMViewSet(viewsets.GenericViewSet):
         GET /api/llm/sessions/
         
         返回用户的所有会话，包含消息数量、最后消息时间等信息。
+        
+        注意：需要登录才能访问会话列表。
         """
+        # 检查用户是否登录
+        if not request.user.is_authenticated:
+            return Response({
+                'status': 'error',
+                'message': '请先登录才能查看会话列表'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
         # 按会话ID分组统计
         sessions = ChatMessage.objects.filter(
             user=request.user
@@ -221,7 +250,16 @@ class LLMViewSet(viewsets.GenericViewSet):
         删除指定会话的所有消息
         
         DELETE /api/llm/sessions/{session_id}/
+        
+        注意：需要登录才能删除会话。
         """
+        # 检查用户是否登录
+        if not request.user.is_authenticated:
+            return Response({
+                'status': 'error',
+                'message': '请先登录才能删除会话'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
         if not session_id:
             return Response({
                 'status': 'error',
@@ -251,7 +289,16 @@ class LLMViewSet(viewsets.GenericViewSet):
         GET /api/llm/statistics/
         
         返回用户的聊天统计数据。
+        
+        注意：需要登录才能查看统计信息。
         """
+        # 检查用户是否登录
+        if not request.user.is_authenticated:
+            return Response({
+                'status': 'error',
+                'message': '请先登录才能查看统计信息'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
         # 统计数据
         total_messages = ChatMessage.objects.filter(user=request.user).count()
         user_messages = ChatMessage.objects.filter(user=request.user, role='user').count()

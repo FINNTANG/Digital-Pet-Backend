@@ -397,7 +397,7 @@ class LangChainLLMService(SimpleLLMService):
             llm = ChatOpenAI(
                 model_name="openai/chatgpt-4o-latest",
                 api_key=self.config.api_key,
-                temperature=0.3,  # 降低温度以获得更稳定的分析结果
+                temperature=0.7,  # 降低温度以获得更稳定的分析结果
                 base_url=self.config.api_base if self.config.api_base else None
             )
             
