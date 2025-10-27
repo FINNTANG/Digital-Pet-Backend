@@ -1,0 +1,74 @@
+# Git 相关
+.git
+.gitignore
+.gitattributes
+
+# Python 缓存
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# 虚拟环境
+venv/
+env/
+ENV/
+.venv
+
+# IDE 相关
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.cursor/
+
+# 测试和覆盖率
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+
+# 数据库文件
+*.sqlite3
+db.sqlite3
+
+# 日志文件
+*.log
+logs/
+
+# 媒体文件（开发环境的）
+media/
+
+# 静态文件（会重新收集）
+staticfiles/
+static/
+
+# 环境变量文件
+.env
+.env.*
+!.env.example
+
+# Docker 相关
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# 文档
+*.md
+!README.md
+docs/
+
+# 临时文件
+*.tmp
+*.bak
+*.swp
+temp/
+tmp/
+
+# 其他
+.specify/
+scripts/
+supervisor/
