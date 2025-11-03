@@ -17,8 +17,263 @@
         border: 2px solid #3498db !important;
         background-color: #e3f2fd !important;
     }
+
+    /* ANALYSIS.EXE 风格弹窗样式 */
+    .analysis-modal {
+        display: none;
+        position: fixed;
+        z-index: 9999;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: 500px;
+        max-width: 90vw;
+        background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+        border: 3px solid #00ff41;
+        border-radius: 0;
+        box-shadow: 0 0 30px rgba(0, 255, 65, 0.5), 0 0 60px rgba(0, 255, 65, 0.3);
+        font-family: 'Courier New', monospace;
+        animation: glitchAnimation 0.3s ease-out;
+    }
+
+    @keyframes glitchAnimation {
+        0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; }
+        50% { transform: translate(-48%, -52%) scale(1.05); }
+        100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    }
+
+    .analysis-overlay {
+        display: none;
+        position: fixed;
+        z-index: 9998;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.8);
+        backdrop-filter: blur(5px);
+    }
+
+    .analysis-header {
+        background: #00ff41;
+        color: #000;
+        padding: 8px 12px;
+        font-weight: bold;
+        font-size: 14px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        letter-spacing: 2px;
+    }
+
+    .analysis-close {
+        cursor: pointer;
+        font-size: 18px;
+        color: #000;
+        font-weight: bold;
+        padding: 0 8px;
+        transition: all 0.2s;
+    }
+
+    .analysis-close:hover {
+        background: #000;
+        color: #00ff41;
+    }
+
+    .analysis-body {
+        padding: 20px;
+        color: #00ff41;
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+
+    .analysis-section {
+        margin-bottom: 20px;
+        border: 1px solid #00ff41;
+        padding: 15px;
+        background: rgba(0, 255, 65, 0.05);
+    }
+
+    .analysis-section-title {
+        font-size: 12px;
+        color: #00ff41;
+        margin-bottom: 10px;
+        font-weight: bold;
+        letter-spacing: 1px;
+    }
+
+    .analysis-content {
+        font-size: 14px;
+        line-height: 1.6;
+        color: #00ff41;
+    }
+
+    .analysis-image-preview {
+        width: 100%;
+        max-width: 100%;
+        border: 2px solid #00ff41;
+        margin-top: 10px;
+        filter: contrast(1.1) brightness(0.95);
+    }
+
+    .emotion-display {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        margin-top: 10px;
+    }
+
+    .emotion-emoji {
+        font-size: 48px;
+        filter: drop-shadow(0 0 10px rgba(0, 255, 65, 0.5));
+    }
+
+    .emotion-details {
+        flex: 1;
+    }
+
+    .emotion-label {
+        font-size: 18px;
+        font-weight: bold;
+        color: #00ff41;
+        text-transform: uppercase;
+    }
+
+    .emotion-confidence {
+        font-size: 12px;
+        color: #00cc33;
+        margin-top: 5px;
+    }
+
+    .emotion-analysis-text {
+        font-size: 11px;
+        color: #00ff88;
+        margin-top: 8px;
+        font-style: italic;
+    }
+
+    .status-bar {
+        display: flex;
+        gap: 10px;
+        margin-top: 10px;
+    }
+
+    .status-item {
+        flex: 1;
+        background: rgba(0, 255, 65, 0.1);
+        border: 1px solid #00ff41;
+        padding: 8px;
+        text-align: center;
+    }
+
+    .status-label {
+        font-size: 10px;
+        color: #00cc33;
+    }
+
+    .status-value {
+        font-size: 16px;
+        font-weight: bold;
+        color: #00ff41;
+        margin-top: 3px;
+    }
+
+    .matrix-effect {
+        animation: matrixGlow 2s ease-in-out infinite;
+    }
+
+    @keyframes matrixGlow {
+        0%, 100% { text-shadow: 0 0 5px rgba(0, 255, 65, 0.5); }
+        50% { text-shadow: 0 0 15px rgba(0, 255, 65, 1); }
+    }
+
+    .scanline {
+        position: absolute;
+        width: 100%;
+        height: 2px;
+        background: rgba(0, 255, 65, 0.3);
+        animation: scan 4s linear infinite;
+        pointer-events: none;
+    }
+
+    @keyframes scan {
+        0% { top: 0; }
+        100% { top: 100%; }
+    }
 </style>
 <h1>AI聊天助手</h1>
+
+<!-- ANALYSIS.EXE 弹窗遮罩 -->
+<div class="analysis-overlay" id="analysisOverlay" onclick="closeAnalysis()"></div>
+
+<!-- ANALYSIS.EXE 弹窗 -->
+<div class="analysis-modal" id="analysisModal">
+    <div class="scanline"></div>
+    <div class="analysis-header">
+        <span class="matrix-effect">ANALYSIS.EXE</span>
+        <span class="analysis-close" onclick="closeAnalysis()">✕</span>
+    </div>
+    <div class="analysis-body">
+        <!-- 照片预览区 -->
+        <div class="analysis-section">
+            <div class="analysis-section-title">► IMAGE DATA</div>
+            <div class="analysis-content">
+                <img id="analysisImagePreview" class="analysis-image-preview" src="" alt="Captured Image">
+            </div>
+        </div>
+
+        <!-- 用户情绪分析区 (仅在检测到人脸时显示) -->
+        <div class="analysis-section" id="emotionSection" style="display: none;">
+            <div class="analysis-section-title">► USER EMOTION ANALYSIS</div>
+            <div class="analysis-content">
+                <div class="emotion-display">
+                    <div class="emotion-emoji" id="emotionEmoji">😐</div>
+                    <div class="emotion-details">
+                        <div class="emotion-label" id="emotionLabel">NEUTRAL</div>
+                        <div class="emotion-confidence">
+                            Confidence: <span id="emotionConfidence" class="matrix-effect">0%</span>
+                        </div>
+                        <div class="emotion-analysis-text" id="emotionAnalysisText">
+                            Analyzing facial microexpressions...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 物品识别区 (仅在检测到物品时显示) -->
+        <div class="analysis-section" id="objectSection" style="display: none;">
+            <div class="analysis-content">
+                <!-- Content 物品描述 -->
+                <div style="margin-bottom: 12px;">
+                    <span style="color: #00ff88; font-size: 13px;">Content: </span>
+                    <span id="objectDescription" style="color: #fff; font-weight: normal; font-size: 14px; line-height: 1.5;">-</span>
+                </div>
+                
+                <!-- Status 宠物状态 -->
+                <div style="margin-bottom: 12px;">
+                    <span style="color: #00ff88; font-size: 13px;">Status: </span>
+                    <span id="petStatus" style="color: #ff4444; font-weight: bold; font-size: 14px;">-</span>
+                </div>
+                
+                <!-- Effects 效果 -->
+                <div style="margin-top: 15px; border-top: 1px solid rgba(0, 255, 65, 0.3); padding-top: 12px;">
+                    <div style="color: #00ff88; font-size: 12px; margin-bottom: 8px;">Effects:</div>
+                    <div style="margin-left: 15px;">
+                        <div style="margin-bottom: 5px;">
+                            <span style="color: #00ff88; font-size: 13px;">Mood: </span>
+                            <span id="moodEffect" class="matrix-effect" style="font-weight: bold; font-size: 15px;">+0</span>
+                        </div>
+                        <div>
+                            <span style="color: #00ff88; font-size: 13px;">Health: </span>
+                            <span id="healthEffect" class="matrix-effect" style="font-weight: bold; font-size: 15px;">+0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 <div style="margin-top: 1rem; display: flex; gap: 1rem;">
     <a href="{% url 'new_session' %}" class="btn btn-secondary">新建会话</a>
@@ -339,8 +594,13 @@ chatForm.addEventListener('submit', async (e) => {
             // 添加AI回复到界面
             addMessage('assistant', data.response);
             
-            // 如果返回了情绪识别结果，显示在情绪结果区域
-            if (data.data && data.data.detected_emotion) {
+            // 如果发送了图片且有分析结果，显示ANALYSIS.EXE弹窗
+            if (capturedImageData && data.data) {
+                showAnalysisWindow(capturedImageData, data.data);
+            }
+            
+            // 旧的情绪结果显示（保留作为备用）
+            if (data.data && data.data.detected_emotion && !capturedImageData) {
                 const emotion = data.data.detected_emotion;
                 const confidence = data.data.emotion_confidence || 0;
                 const emotionEmojis = {
@@ -478,6 +738,179 @@ async function clearHistory() {
     } catch (error) {
         alert('网络错误：' + error.message);
     }
+}
+
+// ANALYSIS.EXE 弹窗控制函数
+function showAnalysisWindow(imageData, analysisData) {
+    console.log('[ANALYSIS.EXE] 显示分析窗口', analysisData);
+    
+    // 设置图片预览
+    document.getElementById('analysisImagePreview').src = imageData;
+    
+    // 情绪映射
+    const emotionEmojis = {
+        'happy': '😊',
+        'sad': '😢',
+        'angry': '😠',
+        'neutral': '😐',
+        'surprise': '😮',
+        'fear': '😨',
+        'disgust': '🤢',
+        'unknown': '❓'
+    };
+    
+    const emotionLabels = {
+        'happy': 'HAPPY',
+        'sad': 'SAD',
+        'angry': 'ANGRY',
+        'neutral': 'NEUTRAL',
+        'surprise': 'SURPRISE',
+        'fear': 'FEAR',
+        'disgust': 'DISGUST',
+        'unknown': 'UNKNOWN'
+    };
+    
+    // 处理情绪分析区域
+    const emotionSection = document.getElementById('emotionSection');
+    if (analysisData.detected_emotion && analysisData.detected_emotion !== 'unknown') {
+        const emotion = analysisData.detected_emotion;
+        const confidence = analysisData.emotion_confidence || 0;
+        const analysis = analysisData.emotion_analysis || 'Facial expression detected.';
+        
+        document.getElementById('emotionEmoji').textContent = emotionEmojis[emotion] || '❓';
+        document.getElementById('emotionLabel').textContent = emotionLabels[emotion] || 'UNKNOWN';
+        document.getElementById('emotionConfidence').textContent = `${(confidence * 100).toFixed(0)}%`;
+        document.getElementById('emotionAnalysisText').textContent = analysis;
+        
+        emotionSection.style.display = 'block';
+    } else {
+        emotionSection.style.display = 'none';
+    }
+    
+    // 处理物品识别区域
+    const objectSection = document.getElementById('objectSection');
+    if (analysisData.detected_objects) {
+        // 显示完整的物品描述（从 AI 的回复消息中提取更详细的描述）
+        let fullDescription = analysisData.detected_objects;
+        
+        // 如果 AI 回复消息包含对物品的详细描述，使用它
+        if (analysisData.message) {
+            const msg = analysisData.message;
+            // 尝试从消息中提取更完整的物品描述（通常在第一句话）
+            const sentences = msg.split(/[。！？.!?]/);
+            if (sentences.length > 0 && sentences[0].length > fullDescription.length) {
+                fullDescription = sentences[0].trim();
+            }
+        }
+        
+        document.getElementById('objectDescription').textContent = fullDescription;
+        
+        // 提取宠物状态（从 AI 回复的 message 中提取情绪表达）
+        let petStatusText = "Analyzing...";
+        
+        if (analysisData.message) {
+            const msg = analysisData.message;
+            
+            // 检测常见的情绪表达模式
+            if (msg.includes('不喜欢') || msg.includes("don't like") || msg.includes("don't really") || msg.includes('讨厌')) {
+                petStatusText = "I don't like it...";
+            } else if (msg.includes('喜欢') || msg.includes('love') || msg.includes('太好了') || msg.includes('wonderful')) {
+                petStatusText = "I love it!";
+            } else if (msg.includes('有趣') || msg.includes('interesting') || msg.includes('好奇') || msg.includes('curious')) {
+                petStatusText = "Interesting...";
+            } else if (msg.includes('开心') || msg.includes('happy') || msg.includes('excited')) {
+                petStatusText = "That's nice!";
+            } else if (msg.includes('无聊') || msg.includes('boring') || msg.includes('meh')) {
+                petStatusText = "Meh...";
+            } else if (msg.includes('害怕') || msg.includes('scary') || msg.includes('fear')) {
+                petStatusText = "A bit scary...";
+            } else {
+                // 如果没有明确的情绪词，根据检测到的情绪设置默认状态
+                if (analysisData.detected_emotion === 'happy') {
+                    petStatusText = "Looks good!";
+                } else if (analysisData.detected_emotion === 'sad') {
+                    petStatusText = "Feeling down?";
+                } else if (analysisData.detected_emotion === 'angry') {
+                    petStatusText = "Not happy about this...";
+                } else {
+                    petStatusText = "I see it.";
+                }
+            }
+        }
+        
+        document.getElementById('petStatus').textContent = petStatusText;
+        objectSection.style.display = 'block';
+    } else {
+        objectSection.style.display = 'none';
+    }
+    
+    // 处理效果状态 - 根据实际的 mood 和 health 值计算变化
+    let moodChange = 0;
+    let healthChange = 0;
+    
+    // 优先使用返回的 mood 和 health 值计算变化
+    if (analysisData.mood !== undefined) {
+        // 假设初始值是某个基准（比如之前的值），计算差值
+        // 这里简化处理：根据情绪和物品来估算变化
+        const baseMood = 80; // 假设的基准值
+        moodChange = analysisData.mood - baseMood;
+    } else {
+        // 如果没有返回具体值，根据情绪和物品推测
+        if (analysisData.detected_emotion && analysisData.detected_emotion !== 'unknown') {
+            const emotion = analysisData.detected_emotion;
+            if (emotion === 'happy') {
+                moodChange = +5;
+            } else if (emotion === 'sad') {
+                moodChange = -6;
+            } else if (emotion === 'angry') {
+                moodChange = -10;
+            } else if (emotion === 'fear') {
+                moodChange = -8;
+            } else if (emotion === 'disgust') {
+                moodChange = -6;
+            } else if (emotion === 'surprise') {
+                moodChange = +2;
+            }
+        }
+    }
+    
+    if (analysisData.health !== undefined) {
+        const baseHealth = 80;
+        healthChange = analysisData.health - baseHealth;
+    } else {
+        // 根据物品类型推测健康影响
+        if (analysisData.detected_objects) {
+            const objDesc = analysisData.detected_objects.toLowerCase();
+            if (objDesc.includes('玩偶') || objDesc.includes('plush') || objDesc.includes('toy') || objDesc.includes('sonic')) {
+                healthChange = -13; // 玩具可能让宠物感到威胁或不安
+            } else if (objDesc.includes('食物') || objDesc.includes('food')) {
+                healthChange = +10;
+            } else if (objDesc.includes('书') || objDesc.includes('book')) {
+                healthChange = +5;
+            } else {
+                healthChange = -5;
+            }
+        }
+    }
+    
+    // 显示效果值（带颜色）
+    const moodElement = document.getElementById('moodEffect');
+    const healthElement = document.getElementById('healthEffect');
+    
+    moodElement.textContent = moodChange >= 0 ? `+${moodChange}` : `${moodChange}`;
+    moodElement.style.color = moodChange >= 0 ? '#00ff41' : '#ff4444';
+    
+    healthElement.textContent = healthChange >= 0 ? `+${healthChange}` : `${healthChange}`;
+    healthElement.style.color = healthChange >= 0 ? '#00ff41' : '#ff4444';
+    
+    // 显示弹窗
+    document.getElementById('analysisOverlay').style.display = 'block';
+    document.getElementById('analysisModal').style.display = 'block';
+}
+
+function closeAnalysis() {
+    document.getElementById('analysisOverlay').style.display = 'none';
+    document.getElementById('analysisModal').style.display = 'none';
 }
 
 // 页面加载完成后，滚动到底部
