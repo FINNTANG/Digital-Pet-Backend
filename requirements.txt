@@ -68,6 +68,19 @@ tiktoken>=0.7.0  # OpenAI token计数
 # Excel导出（用于Admin数据导出）
 openpyxl==3.1.5
 
+# ========== 数据库驱动 ==========
+
+# PostgreSQL 数据库适配器（用于生产环境）
+psycopg2-binary==2.9.9
+
+# ========== 生产环境服务器 ==========
+
+# Gunicorn（生产环境WSGI服务器）
+gunicorn==23.0.0
+
+# Gevent（可选，用于异步工作模式）
+# gevent==24.2.1
+
 # ========== 开发工具（可选） ==========
 
 # pylint==3.3.3  # 代码检查工具
