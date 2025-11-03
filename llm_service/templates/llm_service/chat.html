@@ -226,6 +226,10 @@
         <div class="analysis-section" id="emotionSection" style="display: none;">
             <div class="analysis-section-title">► USER EMOTION ANALYSIS</div>
             <div class="analysis-content">
+                <div id="playerMoodContainer" style="display: none; margin-bottom: 12px; padding: 8px; background: rgba(0, 255, 65, 0.12); border: 1px solid rgba(0, 255, 65, 0.5);">
+                    <span style="color: #00ff88; font-size: 13px;">Player Mood:</span>
+                    <span id="playerMood" style="color: #00ff41; font-weight: bold; font-size: 15px; margin-left: 6px;">-</span>
+                </div>
                 <div class="emotion-display">
                     <div class="emotion-emoji" id="emotionEmoji">😐</div>
                     <div class="emotion-details">
@@ -759,7 +763,7 @@ function showAnalysisWindow(imageData, analysisData) {
         'unknown': '❓'
     };
     
-    const emotionLabels = {
+    const emotionLabelsUpper = {
         'happy': 'HAPPY',
         'sad': 'SAD',
         'angry': 'ANGRY',
@@ -768,6 +772,17 @@ function showAnalysisWindow(imageData, analysisData) {
         'fear': 'FEAR',
         'disgust': 'DISGUST',
         'unknown': 'UNKNOWN'
+    };
+
+    const emotionLabelsShort = {
+        'happy': 'Happy',
+        'sad': 'Sad',
+        'angry': 'Angry',
+        'neutral': 'Neutral',
+        'surprise': 'Surprised',
+        'fear': 'Afraid',
+        'disgust': 'Disgusted',
+        'unknown': 'Unknown'
     };
     
     // 处理情绪分析区域
@@ -778,13 +793,16 @@ function showAnalysisWindow(imageData, analysisData) {
         const analysis = analysisData.emotion_analysis || 'Facial expression detected.';
         
         document.getElementById('emotionEmoji').textContent = emotionEmojis[emotion] || '❓';
-        document.getElementById('emotionLabel').textContent = emotionLabels[emotion] || 'UNKNOWN';
+        document.getElementById('emotionLabel').textContent = emotionLabelsUpper[emotion] || 'UNKNOWN';
         document.getElementById('emotionConfidence').textContent = `${(confidence * 100).toFixed(0)}%`;
         document.getElementById('emotionAnalysisText').textContent = analysis;
+        document.getElementById('playerMood').textContent = emotionLabelsShort[emotion] || 'Unknown';
+        document.getElementById('playerMoodContainer').style.display = 'block';
         
         emotionSection.style.display = 'block';
     } else {
         emotionSection.style.display = 'none';
+        document.getElementById('playerMoodContainer').style.display = 'none';
     }
     
     // 处理物品识别区域
@@ -803,7 +821,7 @@ function showAnalysisWindow(imageData, analysisData) {
             }
         }
         
-        document.getElementById('objectDescription').textContent = fullDescription;
+        document.getElementById('objectDescription').textContent = fullDescription.slice(0, 45).trim();
         
         // 提取宠物状态（从 AI 回复的 message 中提取情绪表达）
         let petStatusText = "Analyzing...";
