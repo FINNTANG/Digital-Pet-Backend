@@ -114,7 +114,8 @@ class LLMViewSet(viewsets.GenericViewSet):
                     'result': ai_response.get('result', True),
                     'options': ai_response.get('options', []),
                     'health': ai_response.get('health', 80),
-                    'mood': ai_response.get('mood', 80)
+                    'mood': ai_response.get('mood', 80),
+                    'face_analyze': ai_response.get('face_analyze')
                 }
             else:
                 # 兼容旧格式（纯字符串响应）

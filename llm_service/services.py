@@ -688,12 +688,15 @@ class LangChainLLMService(SimpleLLMService):
             data = json.loads(json_str)
             
             # 确保包含所有必需字段
+            face_analyze = data.get("face_analyze") if isinstance(data.get("face_analyze"), dict) else None
+
             result = {
                 "result": data.get("result", True),
                 "message": data.get("message", content),
                 "options": data.get("options", ["Continue chatting", "Change the topic", "Take a break"]),
                 "health": data.get("health", self._get_pet_attributes(session_id)['health']),
-                "mood": data.get("mood", self._get_pet_attributes(session_id)['mood'])
+                "mood": data.get("mood", self._get_pet_attributes(session_id)['mood']),
+                "face_analyze": face_analyze
             }
             
             # 更新宠物属性
@@ -712,7 +715,8 @@ class LangChainLLMService(SimpleLLMService):
                 "message": content,
                 "options": ["Continue chatting", "Change the topic", "Take a break"],
                 "health": attrs['health'],
-                "mood": attrs['mood']
+                "mood": attrs['mood'],
+                "face_analyze": None
             }
     
     def _get_system_prompt(self, pet_type=None):
