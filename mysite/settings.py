@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-^&_ejlcps++eu*$-&j_gw84c2&s_g&672$fpj00i3s3ja$u$#k
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['pet-api.plusdoit.com', 'pet.plusdoit.com']
 
 
 # Application definition
