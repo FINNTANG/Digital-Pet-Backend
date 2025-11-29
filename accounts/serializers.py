@@ -430,3 +430,10 @@ class EmailVerificationSerializer(serializers.ModelSerializer):
 
 
 
+
+
+
+
+
+
+
